@@ -1,0 +1,169 @@
+/* 主题样式 CSS */
+
+/* 默认主题 */
+.markdown-preview.theme-default {
+  --heading-color: #1a202c;
+  --text-color: #4a5568;
+  --link-color: #3182ce;
+  --code-bg: #f7fafc;
+  --blockquote-color: #718096;
+  --blockquote-border: #e2e8f0;
+  --table-border: #e2e8f0;
+  --table-header-bg: #edf2f7;
+}
+
+.markdown-preview.dark.theme-default {
+  --heading-color: #f7fafc;
+  --text-color: #e2e8f0;
+  --link-color: #63b3ed;
+  --code-bg: #2d3748;
+  --blockquote-color: #a0aec0;
+  --blockquote-border: #4a5568;
+  --table-border: #4a5568;
+  --table-header-bg: #2d3748;
+}
+
+/* GitHub 主题 */
+.markdown-preview.theme-github {
+  --heading-color: #24292e;
+  --text-color: #24292e;
+  --link-color: #0366d6;
+  --code-bg: #f6f8fa;
+  --blockquote-color: #6a737d;
+  --blockquote-border: #dfe2e5;
+  --table-border: #dfe2e5;
+  --table-header-bg: #f6f8fa;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+.markdown-preview.dark.theme-github {
+  --heading-color: #c9d1d9;
+  --text-color: #c9d1d9;
+  --link-color: #58a6ff;
+  --code-bg: #161b22;
+  --blockquote-color: #8b949e;
+  --blockquote-border: #30363d;
+  --table-border: #30363d;
+  --table-header-bg: #161b22;
+}
+
+/* Notion 主题 */
+.markdown-preview.theme-notion {
+  --heading-color: #37352f;
+  --text-color: #37352f;
+  --link-color: #0b6bcb;
+  --code-bg: #f7f6f3;
+  --blockquote-color: #6b6b6b;
+  --blockquote-border: #e3e2e0;
+  --table-border: #e3e2e0;
+  --table-header-bg: #f7f6f3;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+.markdown-preview.dark.theme-notion {
+  --heading-color: #ffffff;
+  --text-color: #e0e0e0;
+  --link-color: #529cca;
+  --code-bg: #3f4447;
+  --blockquote-color: #9b9a97;
+  --blockquote-border: #4a4a4a;
+  --table-border: #4a4a4a;
+  --table-header-bg: #3f4447;
+}
+
+/* ChatGPT 主题 */
+.markdown-preview.theme-chatgpt {
+  --heading-color: #202123;
+  --text-color: #353740;
+  --link-color: #10a37f;
+  --code-bg: #f7f7f8;
+  --blockquote-color: #6e6e80;
+  --blockquote-border: #e5e5e5;
+  --table-border: #e5e5e5;
+  --table-header-bg: #f7f7f8;
+  font-family: "Söhne", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+}
+
+.markdown-preview.dark.theme-chatgpt {
+  --heading-color: #d1d5db;
+  --text-color: #ececf1;
+  --link-color: #10a37f;
+  --code-bg: #2a2b32;
+  --blockquote-color: #acacbe;
+  --blockquote-border: #4d4d4f;
+  --table-border: #4d4d4f;
+  --table-header-bg: #2a2b32;
+}
+
+/* 应用主题变量到元素 */
+.markdown-preview {
+  color: var(--text-color);
+}
+
+.markdown-preview h1,
+.markdown-preview h2,
+.markdown-preview h3,
+.markdown-preview h4,
+.markdown-preview h5,
+.markdown-preview h6 {
+  color: var(--heading-color);
+}
+
+.markdown-preview a {
+  color: var(--link-color);
+}
+
+.markdown-preview code:not([class*="language-"]) {
+  background-color: var(--code-bg);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.markdown-preview blockquote {
+  color: var(--blockquote-color);
+  border-left-color: var(--blockquote-border) !important;
+}
+
+.markdown-preview table {
+  border-color: var(--table-border) !important;
+}
+
+.markdown-preview th {
+  background-color: var(--table-header-bg) !important;
+  border-color: var(--table-border) !important;
+}
+
+.markdown-preview td {
+  border-color: var(--table-border) !important;
+}
+
+/* 主题特定样式 */
+
+/* GitHub 特定样式 */
+.markdown-preview.theme-github h1,
+.markdown-preview.theme-github h2 {
+  border-bottom: 1px solid var(--blockquote-border);
+  padding-bottom: 0.3em;
+}
+
+/* Notion 特定样式 */
+.markdown-preview.theme-notion {
+  line-height: 1.5;
+}
+
+.markdown-preview.theme-notion h1,
+.markdown-preview.theme-notion h2,
+.markdown-preview.theme-notion h3 {
+  font-weight: 600;
+}
+
+/* ChatGPT 特定样式 */
+.markdown-preview.theme-chatgpt {
+  line-height: 1.6;
+}
+
+.markdown-preview.theme-chatgpt pre {
+  border-radius: 6px;
+}
