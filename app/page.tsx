@@ -36,8 +36,35 @@ import ThemePreview from "@/components/theme-preview"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
+// 示例Markdown内容
+const sampleMarkdown = `# 欢迎使用Markdown转换器
+
+## 功能特点
+- 将Markdown转换为PDF
+- 导出为PNG/JPG图片
+- 将渲染内容复制到剪贴板
+- 多种主题和自定义选项
+
+## 代码示例
+\`\`\`javascript
+function greet() {
+  console.log("你好，Markdown！");
+}
+\`\`\`
+
+## 表格示例
+| 功能 | 状态 |
+|---------|--------|
+| PDF导出 | ✅ |
+| 图片导出 | ✅ |
+| 剪贴板复制 | ✅ |
+| 主题 | ✅ |
+
+> 试着粘贴你自己的Markdown内容或ChatGPT回复到这里！
+`
+
 export default function Home() {
-  const [markdown, setMarkdown] = useState<string>("")
+  const [markdown, setMarkdown] = useState<string>(sampleMarkdown)
   const [theme, setTheme] = useState<string>("light")
   const [themeStyle, setThemeStyle] = useState<string>("default")
   const [fontSize, setFontSize] = useState<number>(16)
@@ -48,6 +75,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<string>("edit")
   const [showEditor, setShowEditor] = useState<boolean>(true)
   const [watermarkText, setWatermarkText] = useState<string>("Markdown转换器 | markdown-converter.vercel.app")
+  const [isMounted, setIsMounted] = useState(false)
 
   // 根据主题和风格获取背景颜色
   const getBackgroundColor = (theme: string, style: string): string => {
@@ -76,61 +104,42 @@ export default function Home() {
     }
   }
 
-  // 为首次使用的用户提供示例Markdown
-  const sampleMarkdown = `# 欢迎使用Markdown转换器
-
-## 功能特点
-- 将Markdown转换为PDF
-- 导出为PNG/JPG图片
-- 将渲染内容复制到剪贴板
-- 多种主题和自定义选项
-
-## 代码示例
-\`\`\`javascript
-function greet() {
-  console.log("你好，Markdown！");
-}
-\`\`\`
-
-## 表格示例
-| 功能 | 状态 |
-|---------|--------|
-| PDF导出 | ✅ |
-| 图片导出 | ✅ |
-| 剪贴板复制 | ✅ |
-| 主题 | ✅ |
-
-> 试着粘贴你自己的Markdown内容或ChatGPT回复到这里！
-`
-
+  // 客户端初始化
   useEffect(() => {
-    // 为首次使用的用户设置示例Markdown
-    if (!markdown) {
-      setMarkdown(sampleMarkdown)
-    }
+    setIsMounted(true)
 
     // 尝试从localStorage加载保存的内容和设置
-    const savedMarkdown = localStorage.getItem("markdown-content")
-    const savedTheme = localStorage.getItem("markdown-theme")
-    const savedThemeStyle = localStorage.getItem("markdown-theme-style")
-    const savedFontSize = localStorage.getItem("markdown-font-size")
-    const savedShowEditor = localStorage.getItem("markdown-show-editor")
+    try {
+      const savedMarkdown = localStorage.getItem("markdown-content")
+      const savedTheme = localStorage.getItem("markdown-theme")
+      const savedThemeStyle = localStorage.getItem("markdown-theme-style")
+      const savedFontSize = localStorage.getItem("markdown-font-size")
+      const savedShowEditor = localStorage.getItem("markdown-show-editor")
 
-    if (savedMarkdown) setMarkdown(savedMarkdown)
-    if (savedTheme) setTheme(savedTheme)
-    if (savedThemeStyle) setThemeStyle(savedThemeStyle)
-    if (savedFontSize) setFontSize(Number.parseInt(savedFontSize, 10))
-    if (savedShowEditor !== null) setShowEditor(savedShowEditor === "true")
+      if (savedMarkdown) setMarkdown(savedMarkdown)
+      if (savedTheme) setTheme(savedTheme)
+      if (savedThemeStyle) setThemeStyle(savedThemeStyle)
+      if (savedFontSize) setFontSize(Number.parseInt(savedFontSize, 10))
+      if (savedShowEditor !== null) setShowEditor(savedShowEditor === "true")
+    } catch (error) {
+      console.error("Error loading from localStorage:", error)
+    }
   }, [])
 
-  // 保存内容和设置到localStorage
+  // 保存内容和设置到localStorage - 只在客户端执行
   useEffect(() => {
-    if (markdown) localStorage.setItem("markdown-content", markdown)
-    localStorage.setItem("markdown-theme", theme)
-    localStorage.setItem("markdown-theme-style", themeStyle)
-    localStorage.setItem("markdown-font-size", fontSize.toString())
-    localStorage.setItem("markdown-show-editor", showEditor.toString())
-  }, [markdown, theme, themeStyle, fontSize, showEditor])
+    if (!isMounted) return
+
+    try {
+      if (markdown) localStorage.setItem("markdown-content", markdown)
+      localStorage.setItem("markdown-theme", theme)
+      localStorage.setItem("markdown-theme-style", themeStyle)
+      localStorage.setItem("markdown-font-size", fontSize.toString())
+      localStorage.setItem("markdown-show-editor", showEditor.toString())
+    } catch (error) {
+      console.error("Error saving to localStorage:", error)
+    }
+  }, [markdown, theme, themeStyle, fontSize, showEditor, isMounted])
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -553,7 +562,7 @@ function greet() {
                 className={`markdown-preview ${theme === "dark" ? "dark" : ""} theme-${themeStyle}`}
                 style={{ fontSize: `${fontSize}px` }}
               >
-                <MarkdownPreview markdown={markdown} themeStyle={themeStyle} />
+                <MarkdownPreview markdown={markdown} themeStyle={themeStyle} isDarkMode={theme === "dark"} />
               </div>
             </div>
           </div>

@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import { useState, useEffect } from "react"
 import ReactMarkdown from "react-markdown"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import {
@@ -18,11 +19,16 @@ import "./theme-styles.css"
 interface MarkdownPreviewProps {
   markdown: string
   themeStyle?: string
+  isDarkMode?: boolean
 }
 
-const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ markdown, themeStyle = "default" }) => {
-  // 通过检查父元素是否有dark类来检测是否处于暗色模式
-  const isDarkMode = document.querySelector(".markdown-preview.dark") !== null
+const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ markdown, themeStyle = "default", isDarkMode = false }) => {
+  const [mounted, setMounted] = useState(false)
+
+  // 只在客户端执行
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // 根据主题风格选择代码高亮样式
   const getCodeStyle = () => {
@@ -49,6 +55,11 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ markdown, themeStyle 
           return oneLight
       }
     }
+  }
+
+  // 如果组件尚未挂载，返回一个占位符
+  if (!mounted) {
+    return <div className="prose prose-sm sm:prose lg:prose-lg max-w-none dark:prose-invert"></div>
   }
 
   return (
