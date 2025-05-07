@@ -18,11 +18,12 @@ import "./theme-styles.css"
 interface MarkdownPreviewProps {
   markdown: string
   themeStyle?: string
+  theme?: string
 }
 
-const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ markdown, themeStyle = "default" }) => {
-  // 通过检查父元素是否有dark类来检测是否处于暗色模式
-  const isDarkMode = document.querySelector(".markdown-preview.dark") !== null
+const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ markdown, themeStyle = "default", theme = "light" }) => {
+  // 使用传入的主题参数而不是检测DOM
+  const isDarkMode = theme === "dark"
 
   // 根据主题风格选择代码高亮样式
   const getCodeStyle = () => {

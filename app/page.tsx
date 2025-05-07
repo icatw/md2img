@@ -25,13 +25,16 @@ import {
   Eye,
   Edit,
 } from "lucide-react"
-import MarkdownPreview from "@/components/markdown-preview"
+import dynamic from "next/dynamic"
 import { jsPDF } from "jspdf"
 import html2canvas from "html2canvas"
 import "@/components/theme-styles.css"
-import ThemePreview from "@/components/theme-preview"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+
+// 动态导入依赖浏览器环境的组件
+const MarkdownPreview = dynamic(() => import("@/components/markdown-preview"), { ssr: false })
+const ThemePreview = dynamic(() => import("@/components/theme-preview"), { ssr: false })
 
 export default function Home() {
   const [markdown, setMarkdown] = useState<string>("")
@@ -51,6 +54,7 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState<boolean>(false)
   const [autoValidate, setAutoValidate] = useState<boolean>(true)
   const [lineCount, setLineCount] = useState<number>(0)
+  const [isMounted, setIsMounted] = useState<boolean>(false)
 
   // 根据主题和风格获取背景颜色
   const getBackgroundColor = (theme: string, style: string): string => {
@@ -113,7 +117,10 @@ function factorial(n) {
 | 代码 | 语法高亮 | ✅ |
 `
 
+  // 确保组件只在客户端渲染
   useEffect(() => {
+    setIsMounted(true)
+
     // 为首次使用的用户设置示例Markdown
     if (!markdown) {
       setMarkdown(sampleMarkdown)
@@ -137,30 +144,38 @@ function factorial(n) {
 
   // 保存内容和设置到localStorage
   useEffect(() => {
+    if (!isMounted) return
+
     if (markdown) localStorage.setItem("markdown-content", markdown)
     localStorage.setItem("markdown-theme", theme)
     localStorage.setItem("markdown-theme-style", themeStyle)
     localStorage.setItem("markdown-font-size", fontSize.toString())
     localStorage.setItem("markdown-show-editor", showEditor.toString())
     localStorage.setItem("markdown-auto-validate", autoValidate.toString())
-  }, [markdown, theme, themeStyle, fontSize, showEditor, autoValidate])
+  }, [markdown, theme, themeStyle, fontSize, showEditor, autoValidate, isMounted])
 
   // 清理临时图片URL
   useEffect(() => {
+    if (!isMounted) return
+
     return () => {
       if (copyImageUrl) {
         URL.revokeObjectURL(copyImageUrl)
       }
     }
-  }, [copyImageUrl])
+  }, [copyImageUrl, isMounted])
 
   // 更新行数计数
   useEffect(() => {
+    if (!isMounted) return
+
     setLineCount(markdown.split("\n").length)
-  }, [markdown])
+  }, [markdown, isMounted])
 
   // 同步滚动行号和编辑器
   useEffect(() => {
+    if (!isMounted) return
+
     const handleEditorScroll = () => {
       if (editorRef.current && lineNumbersRef.current) {
         lineNumbersRef.current.scrollTop = editorRef.current.scrollTop
@@ -174,7 +189,7 @@ function factorial(n) {
         editor.removeEventListener("scroll", handleEditorScroll)
       }
     }
-  }, [])
+  }, [isMounted])
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -595,6 +610,15 @@ function factorial(n) {
     return isDark ? "secondary" : "outline"
   }
 
+  // 如果组件尚未挂载，返回加载状态或空内容
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
   return (
     <main
       className={`min-h-screen transition-colors duration-300 ${theme === "dark" ? "bg-slate-900 text-white" : "bg-white text-black"}`}
@@ -836,7 +860,7 @@ function factorial(n) {
                 className={`markdown-preview ${theme === "dark" ? "dark" : ""} theme-${themeStyle} p-6`}
                 style={{ fontSize: `${fontSize}px` }}
               >
-                <MarkdownPreview markdown={markdown} themeStyle={themeStyle} />
+                <MarkdownPreview markdown={markdown} themeStyle={themeStyle} theme={theme} />
               </div>
             </div>
           </div>
