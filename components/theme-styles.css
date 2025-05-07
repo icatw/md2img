@@ -10,6 +10,7 @@
   --blockquote-border: #e2e8f0;
   --table-border: #e2e8f0;
   --table-header-bg: #edf2f7;
+  line-height: 1.8;
 }
 
 .markdown-preview.dark.theme-default {
@@ -21,6 +22,7 @@
   --blockquote-border: #4a5568;
   --table-border: #4a5568;
   --table-header-bg: #2d3748;
+  line-height: 1.8;
 }
 
 /* GitHub 主题 */
@@ -34,6 +36,7 @@
   --table-border: #dfe2e5;
   --table-header-bg: #f6f8fa;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  line-height: 1.8;
 }
 
 .markdown-preview.dark.theme-github {
@@ -45,6 +48,7 @@
   --blockquote-border: #30363d;
   --table-border: #30363d;
   --table-header-bg: #161b22;
+  line-height: 1.8;
 }
 
 /* Notion 主题 */
@@ -59,6 +63,7 @@
   --table-header-bg: #f7f6f3;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
   letter-spacing: -0.01em;
+  line-height: 1.8;
 }
 
 .markdown-preview.dark.theme-notion {
@@ -70,6 +75,7 @@
   --blockquote-border: #4a4a4a;
   --table-border: #4a4a4a;
   --table-header-bg: #3f4447;
+  line-height: 1.8;
 }
 
 /* ChatGPT 主题 */
@@ -83,6 +89,7 @@
   --table-border: #e5e5e5;
   --table-header-bg: #f7f7f8;
   font-family: "Söhne", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+  line-height: 1.8;
 }
 
 .markdown-preview.dark.theme-chatgpt {
@@ -94,6 +101,7 @@
   --blockquote-border: #4d4d4f;
   --table-border: #4d4d4f;
   --table-header-bg: #2a2b32;
+  line-height: 1.8;
 }
 
 /* 应用主题变量到元素 */
@@ -108,6 +116,12 @@
 .markdown-preview h5,
 .markdown-preview h6 {
   color: var(--heading-color);
+  margin-top: 1.5em;
+  margin-bottom: 0.75em;
+}
+
+.markdown-preview p {
+  margin-bottom: 1.2em;
 }
 
 .markdown-preview a {
@@ -124,19 +138,34 @@
 .markdown-preview blockquote {
   color: var(--blockquote-color);
   border-left-color: var(--blockquote-border) !important;
+  padding: 0.5em 1em;
+  margin: 1.5em 0;
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+  padding-left: 1.5em;
+  margin-bottom: 1.2em;
+}
+
+.markdown-preview li {
+  margin-bottom: 0.5em;
 }
 
 .markdown-preview table {
   border-color: var(--table-border) !important;
+  margin: 1.5em 0;
 }
 
 .markdown-preview th {
   background-color: var(--table-header-bg) !important;
   border-color: var(--table-border) !important;
+  padding: 0.75em;
 }
 
 .markdown-preview td {
   border-color: var(--table-border) !important;
+  padding: 0.75em;
 }
 
 /* 主题特定样式 */
@@ -150,7 +179,7 @@
 
 /* Notion 特定样式 */
 .markdown-preview.theme-notion {
-  line-height: 1.5;
+  line-height: 1.8;
 }
 
 .markdown-preview.theme-notion h1,
@@ -161,9 +190,27 @@
 
 /* ChatGPT 特定样式 */
 .markdown-preview.theme-chatgpt {
-  line-height: 1.6;
+  line-height: 1.8;
 }
 
 .markdown-preview.theme-chatgpt pre {
   border-radius: 6px;
+  margin: 1.5em 0;
+}
+
+/* 代码块样式增强 */
+.markdown-preview pre {
+  padding: 1em;
+  margin: 1.5em 0;
+  overflow: auto;
+  border-radius: 4px;
+}
+
+/* 增强列表间距 */
+.markdown-preview ul ul,
+.markdown-preview ol ol,
+.markdown-preview ul ol,
+.markdown-preview ol ul {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
 }

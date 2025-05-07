@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -15,18 +14,16 @@ import {
   FileImage,
   FileIcon as FilePdf,
   Upload,
-  Maximize2,
   Moon,
   Sun,
   FileDown,
   Clipboard,
   Settings,
   Github,
-  BookOpen,
   FileText,
   Loader2,
-  PanelLeftClose,
-  PanelLeftOpen,
+  Eye,
+  Edit,
 } from "lucide-react"
 import MarkdownPreview from "@/components/markdown-preview"
 import { jsPDF } from "jspdf"
@@ -36,46 +33,24 @@ import ThemePreview from "@/components/theme-preview"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
-// 示例Markdown内容
-const sampleMarkdown = `# 欢迎使用Markdown转换器
-
-## 功能特点
-- 将Markdown转换为PDF
-- 导出为PNG/JPG图片
-- 将渲染内容复制到剪贴板
-- 多种主题和自定义选项
-
-## 代码示例
-\`\`\`javascript
-function greet() {
-  console.log("你好，Markdown！");
-}
-\`\`\`
-
-## 表格示例
-| 功能 | 状态 |
-|---------|--------|
-| PDF导出 | ✅ |
-| 图片导出 | ✅ |
-| 剪贴板复制 | ✅ |
-| 主题 | ✅ |
-
-> 试着粘贴你自己的Markdown内容或ChatGPT回复到这里！
-`
-
 export default function Home() {
-  const [markdown, setMarkdown] = useState<string>(sampleMarkdown)
+  const [markdown, setMarkdown] = useState<string>("")
   const [theme, setTheme] = useState<string>("light")
   const [themeStyle, setThemeStyle] = useState<string>("default")
   const [fontSize, setFontSize] = useState<number>(16)
   const previewRef = useRef<HTMLDivElement>(null)
+  const editorRef = useRef<HTMLTextAreaElement>(null)
+  const lineNumbersRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isExporting, setIsExporting] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<string>("edit")
   const [showEditor, setShowEditor] = useState<boolean>(true)
   const [watermarkText, setWatermarkText] = useState<string>("Markdown转换器 | markdown-converter.vercel.app")
-  const [isMounted, setIsMounted] = useState(false)
+  const [copyImageUrl, setCopyImageUrl] = useState<string | null>(null)
+  const [showSettings, setShowSettings] = useState<boolean>(false)
+  const [autoValidate, setAutoValidate] = useState<boolean>(true)
+  const [lineCount, setLineCount] = useState<number>(0)
 
   // 根据主题和风格获取背景颜色
   const getBackgroundColor = (theme: string, style: string): string => {
@@ -104,42 +79,102 @@ export default function Home() {
     }
   }
 
-  // 客户端初始化
+  // 为首次使用的用户提供示例Markdown
+  const sampleMarkdown = `# Markdown转图片转换器
+
+这是一个**强大的工具**，可以将您的Markdown转换为精美的图片和PDF。
+
+## 功能特点
+
+- 使用Markdown进行丰富的文本格式化
+- 代码语法高亮
+- 表格和列表
+- 数学公式（KaTeX）
+- 图表（Mermaid）
+
+> 自定义主题、字体和导出设置，创建专业文档
+
+## 代码示例
+
+\`\`\`javascript
+// 计算阶乘的简单函数
+function factorial(n) {
+  if (n <= 1) return 1;
+  return n * factorial(n - 1);
+}
+\`\`\`
+
+## 表格示例
+
+| 功能 | 描述 | 支持 |
+|---------|----------------------|------|
+| 数学公式 | 使用KaTeX语法表示方程式 | ✅ |
+| 图表 | 使用Mermaid语法创建流程图 | ✅ |
+| 代码 | 语法高亮 | ✅ |
+`
+
   useEffect(() => {
-    setIsMounted(true)
+    // 为首次使用的用户设置示例Markdown
+    if (!markdown) {
+      setMarkdown(sampleMarkdown)
+    }
 
     // 尝试从localStorage加载保存的内容和设置
-    try {
-      const savedMarkdown = localStorage.getItem("markdown-content")
-      const savedTheme = localStorage.getItem("markdown-theme")
-      const savedThemeStyle = localStorage.getItem("markdown-theme-style")
-      const savedFontSize = localStorage.getItem("markdown-font-size")
-      const savedShowEditor = localStorage.getItem("markdown-show-editor")
+    const savedMarkdown = localStorage.getItem("markdown-content")
+    const savedTheme = localStorage.getItem("markdown-theme")
+    const savedThemeStyle = localStorage.getItem("markdown-theme-style")
+    const savedFontSize = localStorage.getItem("markdown-font-size")
+    const savedShowEditor = localStorage.getItem("markdown-show-editor")
+    const savedAutoValidate = localStorage.getItem("markdown-auto-validate")
 
-      if (savedMarkdown) setMarkdown(savedMarkdown)
-      if (savedTheme) setTheme(savedTheme)
-      if (savedThemeStyle) setThemeStyle(savedThemeStyle)
-      if (savedFontSize) setFontSize(Number.parseInt(savedFontSize, 10))
-      if (savedShowEditor !== null) setShowEditor(savedShowEditor === "true")
-    } catch (error) {
-      console.error("Error loading from localStorage:", error)
-    }
+    if (savedMarkdown) setMarkdown(savedMarkdown)
+    if (savedTheme) setTheme(savedTheme)
+    if (savedThemeStyle) setThemeStyle(savedThemeStyle)
+    if (savedFontSize) setFontSize(Number.parseInt(savedFontSize, 10))
+    if (savedShowEditor !== null) setShowEditor(savedShowEditor === "true")
+    if (savedAutoValidate !== null) setAutoValidate(savedAutoValidate === "true")
   }, [])
 
-  // 保存内容和设置到localStorage - 只在客户端执行
+  // 保存内容和设置到localStorage
   useEffect(() => {
-    if (!isMounted) return
+    if (markdown) localStorage.setItem("markdown-content", markdown)
+    localStorage.setItem("markdown-theme", theme)
+    localStorage.setItem("markdown-theme-style", themeStyle)
+    localStorage.setItem("markdown-font-size", fontSize.toString())
+    localStorage.setItem("markdown-show-editor", showEditor.toString())
+    localStorage.setItem("markdown-auto-validate", autoValidate.toString())
+  }, [markdown, theme, themeStyle, fontSize, showEditor, autoValidate])
 
-    try {
-      if (markdown) localStorage.setItem("markdown-content", markdown)
-      localStorage.setItem("markdown-theme", theme)
-      localStorage.setItem("markdown-theme-style", themeStyle)
-      localStorage.setItem("markdown-font-size", fontSize.toString())
-      localStorage.setItem("markdown-show-editor", showEditor.toString())
-    } catch (error) {
-      console.error("Error saving to localStorage:", error)
+  // 清理临时图片URL
+  useEffect(() => {
+    return () => {
+      if (copyImageUrl) {
+        URL.revokeObjectURL(copyImageUrl)
+      }
     }
-  }, [markdown, theme, themeStyle, fontSize, showEditor, isMounted])
+  }, [copyImageUrl])
+
+  // 更新行数计数
+  useEffect(() => {
+    setLineCount(markdown.split("\n").length)
+  }, [markdown])
+
+  // 同步滚动行号和编辑器
+  useEffect(() => {
+    const handleEditorScroll = () => {
+      if (editorRef.current && lineNumbersRef.current) {
+        lineNumbersRef.current.scrollTop = editorRef.current.scrollTop
+      }
+    }
+
+    const editor = editorRef.current
+    if (editor) {
+      editor.addEventListener("scroll", handleEditorScroll)
+      return () => {
+        editor.removeEventListener("scroll", handleEditorScroll)
+      }
+    }
+  }, [])
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -148,6 +183,7 @@ export default function Home() {
       reader.onload = (e) => {
         const content = e.target?.result as string
         setMarkdown(content)
+        if (autoValidate) validateMarkdown(content)
       }
       reader.readAsText(file)
       toast({
@@ -182,6 +218,7 @@ export default function Home() {
         reader.onload = (e) => {
           const content = e.target?.result as string
           setMarkdown(content)
+          if (autoValidate) validateMarkdown(content)
         }
         reader.readAsText(file)
         toast({
@@ -216,6 +253,16 @@ export default function Home() {
   }
 
   const exportAsPDF = async () => {
+    // 如果在编辑模式，先切换到预览模式以确保内容可见
+    const wasInEditMode = showEditor && activeTab === "edit"
+    if (wasInEditMode) {
+      // 临时切换到预览模式
+      setActiveTab("preview")
+    }
+
+    // 等待DOM更新
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
     if (!previewRef.current) return
 
     setIsExporting("pdf")
@@ -268,10 +315,24 @@ export default function Home() {
       })
     } finally {
       setIsExporting(null)
+      // 如果之前是编辑模式，恢复
+      if (wasInEditMode) {
+        setActiveTab("edit")
+      }
     }
   }
 
   const exportAsImage = async () => {
+    // 如果在编辑模式，先切换到预览模式以确保内容可见
+    const wasInEditMode = showEditor && activeTab === "edit"
+    if (wasInEditMode) {
+      // 临时切换到预览模式
+      setActiveTab("preview")
+    }
+
+    // 等待DOM更新
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
     if (!previewRef.current) return
 
     setIsExporting("image")
@@ -317,10 +378,25 @@ export default function Home() {
       })
     } finally {
       setIsExporting(null)
+      // 如果之前是编辑模式，恢复
+      if (wasInEditMode) {
+        setActiveTab("edit")
+      }
     }
   }
 
+  // 完全重写的复制到剪贴板功能
   const copyToClipboard = async () => {
+    // 如果在编辑模式，先切换到预览模式以确保内容可见
+    const wasInEditMode = showEditor && activeTab === "edit"
+    if (wasInEditMode) {
+      // 临时切换到预览模式
+      setActiveTab("preview")
+    }
+
+    // 等待DOM更新
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
     if (!previewRef.current) return
 
     setIsExporting("clipboard")
@@ -349,33 +425,118 @@ export default function Home() {
       // 添加水印
       const canvasWithWatermark = addWatermark(canvas, watermarkText)
 
+      // 将Canvas转换为Blob
       canvasWithWatermark.toBlob(async (blob) => {
         if (blob) {
           try {
-            await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })])
+            // 创建一个新的ClipboardItem对象
+            const clipboardItem = new ClipboardItem({
+              [blob.type]: blob,
+            })
+
+            // 尝试直接写入剪贴板
+            await navigator.clipboard.write([clipboardItem])
 
             toast({
               title: "已复制到剪贴板",
-              description: "图片已复制到您的剪贴板。您现在可以将其粘贴到任何地方。",
+              description: "图片已成功复制到剪贴板，您可以直接粘贴到其他应用中。",
             })
-          } catch (error) {
+          } catch (clipboardError) {
+            console.error("剪贴板API错误:", clipboardError)
+
+            // 如果直接复制失败，尝试创建一个可见的图片元素并提示用户手动复制
+            if (copyImageUrl) {
+              URL.revokeObjectURL(copyImageUrl)
+            }
+
+            const url = URL.createObjectURL(blob)
+            setCopyImageUrl(url)
+
+            // 创建一个模态对话框，显示图片并提示用户手动复制
+            const modal = document.createElement("div")
+            modal.style.position = "fixed"
+            modal.style.top = "0"
+            modal.style.left = "0"
+            modal.style.width = "100%"
+            modal.style.height = "100%"
+            modal.style.backgroundColor = "rgba(0, 0, 0, 0.8)"
+            modal.style.zIndex = "9999"
+            modal.style.display = "flex"
+            modal.style.flexDirection = "column"
+            modal.style.alignItems = "center"
+            modal.style.justifyContent = "center"
+            modal.style.padding = "20px"
+
+            const modalContent = document.createElement("div")
+            modalContent.style.backgroundColor = theme === "dark" ? "#1e1e2e" : "#ffffff"
+            modalContent.style.borderRadius = "8px"
+            modalContent.style.padding = "20px"
+            modalContent.style.maxWidth = "90%"
+            modalContent.style.maxHeight = "90%"
+            modalContent.style.overflow = "auto"
+            modalContent.style.display = "flex"
+            modalContent.style.flexDirection = "column"
+            modalContent.style.alignItems = "center"
+
+            const title = document.createElement("h3")
+            title.textContent = "请手动复制图片"
+            title.style.marginBottom = "15px"
+            title.style.color = theme === "dark" ? "#ffffff" : "#000000"
+
+            const instructions = document.createElement("p")
+            instructions.textContent = '右键点击图片，选择"复制图片"选项'
+            instructions.style.marginBottom = "15px"
+            instructions.style.color = theme === "dark" ? "#cccccc" : "#333333"
+
+            const img = document.createElement("img")
+            img.src = url
+            img.style.maxWidth = "100%"
+            img.style.maxHeight = "70vh"
+            img.style.objectFit = "contain"
+            img.style.marginBottom = "15px"
+            img.style.border = theme === "dark" ? "1px solid #444" : "1px solid #ddd"
+
+            const closeButton = document.createElement("button")
+            closeButton.textContent = "关闭"
+            closeButton.style.padding = "8px 16px"
+            closeButton.style.backgroundColor = "#f43f5e"
+            closeButton.style.color = "white"
+            closeButton.style.border = "none"
+            closeButton.style.borderRadius = "4px"
+            closeButton.style.cursor = "pointer"
+            closeButton.onclick = () => {
+              document.body.removeChild(modal)
+            }
+
+            modalContent.appendChild(title)
+            modalContent.appendChild(instructions)
+            modalContent.appendChild(img)
+            modalContent.appendChild(closeButton)
+            modal.appendChild(modalContent)
+
+            document.body.appendChild(modal)
+
             toast({
-              title: "复制失败",
-              description: "复制到剪贴板时出现错误。您的浏览器可能不支持此功能。",
-              variant: "destructive",
+              title: "直接复制失败",
+              description: "请在弹出窗口中右键点击图片并选择'复制图片'选项。",
+              duration: 5000,
             })
-          } finally {
-            setIsExporting(null)
           }
         }
-      })
+      }, "image/png")
     } catch (error) {
+      console.error("生成图片错误:", error)
       toast({
         title: "复制失败",
-        description: "生成图片时出现错误。",
+        description: "生成图片时出现错误。请稍后再试。",
         variant: "destructive",
       })
+    } finally {
       setIsExporting(null)
+      // 如果之前是编辑模式，恢复
+      if (wasInEditMode) {
+        setActiveTab("edit")
+      }
     }
   }
 
@@ -384,7 +545,49 @@ export default function Home() {
   }
 
   const toggleEditor = () => {
-    setShowEditor(!showEditor)
+    const newShowEditor = !showEditor
+    setShowEditor(newShowEditor)
+    setActiveTab(newShowEditor ? "edit" : "preview")
+  }
+
+  const toggleSettings = () => {
+    setShowSettings(!showSettings)
+  }
+
+  // 自动验证功能
+  const validateMarkdown = (content: string) => {
+    if (!autoValidate) return
+
+    // 简单的Markdown验证逻辑
+    const errors = []
+
+    // 检查未闭合的代码块
+    const codeBlockStarts = (content.match(/```/g) || []).length
+    if (codeBlockStarts % 2 !== 0) {
+      errors.push("存在未闭合的代码块")
+    }
+
+    // 检查未闭合的链接
+    const linkOpens = (content.match(/\[/g) || []).length
+    const linkCloses = (content.match(/\]/g) || []).length
+    if (linkOpens !== linkCloses) {
+      errors.push("存在未闭合的链接标记")
+    }
+
+    // 如果有错误，显示提示
+    if (errors.length > 0) {
+      toast({
+        title: "Markdown语法警告",
+        description: errors.join("；"),
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleMarkdownChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newContent = e.target.value
+    setMarkdown(newContent)
+    validateMarkdown(newContent)
   }
 
   // 根据当前主题获取按钮变体
@@ -403,7 +606,8 @@ export default function Home() {
         <div className="container mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <FileText className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-bold">Markdown转换器</h1>
+            <h1 className="text-xl font-bold">Markdown编辑器</h1>
+            <p className="text-sm text-muted-foreground hidden md:block">编辑Markdown并查看实时预览</p>
           </div>
           <div className="flex items-center gap-3">
             <TooltipProvider>
@@ -437,6 +641,118 @@ export default function Home() {
         </div>
       </header>
 
+      {/* 工具栏 */}
+      <div className={`border-b ${theme === "dark" ? "border-slate-700" : "border-slate-200"}`}>
+        <div className="container mx-auto py-2 px-4 md:px-8">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-3">
+              {/* 编辑/预览切换按钮组 */}
+              <div className="flex border rounded-md overflow-hidden">
+                <Button
+                  variant={showEditor ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => {
+                    setShowEditor(true)
+                    setActiveTab("edit")
+                  }}
+                  className={`rounded-none ${showEditor ? "bg-primary text-primary-foreground" : ""}`}
+                >
+                  <Edit className="h-4 w-4 mr-1" />
+                  编辑Markdown
+                </Button>
+                <Button
+                  variant={!showEditor ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => {
+                    setShowEditor(false)
+                    setActiveTab("preview")
+                  }}
+                  className={`rounded-none ${!showEditor ? "bg-primary text-primary-foreground" : ""}`}
+                >
+                  <Eye className="h-4 w-4 mr-1" />
+                  预览
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-1 border rounded-md px-2 py-1">
+                <span className="text-sm">自动验证</span>
+                <Switch size="sm" checked={autoValidate} onCheckedChange={setAutoValidate} />
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => document.getElementById("file-upload")?.click()}
+                className="flex items-center gap-1"
+              >
+                <Upload className="h-4 w-4 mr-1" />
+                导入Markdown .md
+              </Button>
+              <input
+                id="file-upload"
+                type="file"
+                accept=".md, .markdown, .txt"
+                className="hidden"
+                onChange={handleFileUpload}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={copyToClipboard}
+                disabled={isExporting !== null}
+                className="flex items-center gap-1"
+              >
+                {isExporting === "clipboard" ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <Clipboard className="h-4 w-4 mr-1" />
+                )}
+                复制
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportAsImage}
+                disabled={isExporting !== null}
+                className="flex items-center gap-1"
+              >
+                {isExporting === "image" ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <FileImage className="h-4 w-4 mr-1" />
+                )}
+                保存图片
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportAsPDF}
+                disabled={isExporting !== null}
+                className="flex items-center gap-1"
+              >
+                {isExporting === "pdf" ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <FilePdf className="h-4 w-4 mr-1" />
+                )}
+                保存PDF
+              </Button>
+
+              <Button variant="outline" size="sm" onClick={toggleSettings} className="flex items-center gap-1">
+                <Settings className="h-4 w-4 mr-1" />
+                设置
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 编辑器和预览区域 */}
       <div className="container mx-auto p-4 md:p-6">
         {/* 移动端标签切换 */}
         <div className="md:hidden mb-4">
@@ -448,51 +764,53 @@ export default function Home() {
           </Tabs>
         </div>
 
-        {/* 编辑器和预览区域 */}
-        <div className="flex flex-col md:flex-row gap-4 mb-6">
+        {/* 主要内容区域 */}
+        <div className="flex flex-col md:flex-row gap-4">
           {/* 编辑器区域 - 可以切换显示/隐藏 */}
           {(showEditor || activeTab === "edit") && (
-            <div className={`${activeTab !== "edit" && "hidden md:block"} ${showEditor ? "md:w-1/2" : "md:w-full"}`}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-primary" />
-                  <h2 className="text-lg font-semibold">编辑器</h2>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant={getButtonVariant(theme === "dark")}
-                    size="sm"
-                    onClick={() => document.getElementById("file-upload")?.click()}
-                    className={`transition-all ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : ""}`}
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    上传文件
-                  </Button>
-                  <input
-                    id="file-upload"
-                    type="file"
-                    accept=".md, .markdown, .txt"
-                    className="hidden"
-                    onChange={handleFileUpload}
-                  />
-                </div>
-              </div>
+            <div
+              className={`${activeTab !== "edit" && "hidden md:block"} ${showEditor ? "md:w-1/2" : "hidden md:hidden"} transition-all duration-300`}
+            >
+              {/* 编辑器容器 */}
               <div
-                className={`relative border rounded-md transition-all ${
-                  theme === "dark" ? "border-slate-700" : "border-slate-200"
+                className={`relative border rounded-md transition-all h-[calc(100vh-220px)] overflow-hidden ${
+                  theme === "dark" ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-slate-50"
                 }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
               >
-                <Textarea
-                  value={markdown}
-                  onChange={(e) => setMarkdown(e.target.value)}
-                  className={`min-h-[500px] font-mono resize-none border-0 rounded-md ${
-                    theme === "dark" ? "bg-slate-800 text-slate-100 placeholder:text-slate-400" : ""
-                  }`}
-                  placeholder="在此处输入或粘贴您的Markdown，或拖放.md文件到此处..."
-                />
+                {/* 编辑器和行号的容器 */}
+                <div className="flex h-full relative">
+                  {/* 行号显示 */}
+                  <div
+                    ref={lineNumbersRef}
+                    className="w-10 bg-opacity-50 flex-shrink-0 text-xs text-muted-foreground font-mono pt-4 pb-8 text-right pr-2 overflow-hidden"
+                    style={{ height: "100%", overflowY: "hidden" }}
+                  >
+                    {Array.from({ length: lineCount }).map((_, i) => (
+                      <div key={i} className="leading-6 h-6">
+                        {i + 1}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 文本编辑区域 */}
+                  <Textarea
+                    ref={editorRef}
+                    value={markdown}
+                    onChange={handleMarkdownChange}
+                    className={`h-full w-full font-mono resize-none border-0 rounded-md p-4 pl-2 ${
+                      theme === "dark"
+                        ? "bg-slate-800 text-slate-100 placeholder:text-slate-400"
+                        : "bg-slate-50 placeholder:text-slate-400"
+                    }`}
+                    placeholder="在此处输入或粘贴您的Markdown，或拖放.md文件到此处..."
+                    style={{ lineHeight: "1.5rem" }}
+                  />
+                </div>
+
+                {/* 拖放提示 */}
                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
                   <div
                     className={`p-3 rounded-lg ${theme === "dark" ? "bg-slate-800" : "bg-white"} shadow-lg border border-dashed ${theme === "dark" ? "border-slate-600" : "border-slate-300"} opacity-90`}
@@ -505,187 +823,149 @@ export default function Home() {
           )}
 
           {/* 预览区域 */}
-          <div className={`${activeTab !== "preview" && "hidden md:block"} ${showEditor ? "md:w-1/2" : "md:w-full"}`}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <BookOpen className="h-5 w-5 text-primary" />
-                <h2 className="text-lg font-semibold">预览</h2>
-              </div>
-              <div className="flex items-center gap-2">
-                {/* 编辑器显示/隐藏按钮 */}
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant={getButtonVariant(theme === "dark")}
-                        size="sm"
-                        onClick={toggleEditor}
-                        className={`hidden md:flex transition-all ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : ""}`}
-                      >
-                        {showEditor ? (
-                          <>
-                            <PanelLeftClose className="h-4 w-4 mr-2" />
-                            隐藏编辑器
-                          </>
-                        ) : (
-                          <>
-                            <PanelLeftOpen className="h-4 w-4 mr-2" />
-                            显示编辑器
-                          </>
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>{showEditor ? "隐藏编辑器以获得更大的预览空间" : "显示编辑器以编辑内容"}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                <Button
-                  variant={getButtonVariant(theme === "dark")}
-                  size="sm"
-                  onClick={toggleFullscreen}
-                  className={`transition-all ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : ""}`}
-                >
-                  <Maximize2 className="h-4 w-4 mr-2" />
-                  {isFullscreen ? "退出全屏" : "全屏"}
-                </Button>
-              </div>
-            </div>
+          <div
+            className={`${activeTab !== "preview" && "hidden md:block"} ${showEditor ? "md:w-1/2" : "w-full"} transition-all duration-300`}
+          >
             <div
-              className={`border rounded-md p-6 overflow-auto transition-all ${
-                isFullscreen ? "fixed inset-0 z-50 p-8" : "min-h-[500px] max-h-[500px]"
+              className={`border rounded-md overflow-auto transition-all h-[calc(100vh-220px)] ${
+                isFullscreen ? "fixed inset-0 z-50 p-8" : ""
               } ${theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200"}`}
             >
               <div
                 ref={previewRef}
-                className={`markdown-preview ${theme === "dark" ? "dark" : ""} theme-${themeStyle}`}
+                className={`markdown-preview ${theme === "dark" ? "dark" : ""} theme-${themeStyle} p-6`}
                 style={{ fontSize: `${fontSize}px` }}
               >
-                <MarkdownPreview markdown={markdown} themeStyle={themeStyle} isDarkMode={theme === "dark"} />
+                <MarkdownPreview markdown={markdown} themeStyle={themeStyle} />
               </div>
             </div>
           </div>
         </div>
 
-        {/* 设置和导出选项 */}
-        <Card
-          className={`mb-6 transition-all ${theme === "dark" ? "bg-slate-800 border-slate-700 text-slate-100" : ""}`}
-        >
-          <CardContent className="pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Settings className="h-5 w-5 text-primary" />
-                  <h3 className={`text-lg font-medium ${theme === "dark" ? "text-slate-100" : ""}`}>主题与样式</h3>
-                </div>
-                <div className="space-y-5">
-                  <div>
-                    <Label
-                      htmlFor="theme-style-select"
-                      className={`mb-2 block ${theme === "dark" ? "text-slate-200" : ""}`}
-                    >
-                      主题风格
-                    </Label>
-                    <div className="grid grid-cols-2 gap-3">
-                      {["default", "github", "notion", "chatgpt"].map((style) => (
-                        <div
-                          key={style}
-                          className={`cursor-pointer rounded-lg overflow-hidden border transition-all ${
-                            themeStyle === style
-                              ? "ring-2 ring-primary"
-                              : theme === "dark"
-                                ? "border-slate-700"
-                                : "border-slate-200"
-                          }`}
-                          onClick={() => setThemeStyle(style)}
-                        >
-                          <ThemePreview themeName={style} isDark={theme === "dark"} isSelected={themeStyle === style} />
-                        </div>
-                      ))}
+        {/* 设置面板 - 条件渲染 */}
+        {showSettings && (
+          <Card
+            className={`mt-6 transition-all ${theme === "dark" ? "bg-slate-800 border-slate-700 text-slate-100" : ""}`}
+          >
+            <CardContent className="pt-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Settings className="h-5 w-5 text-primary" />
+                    <h3 className={`text-lg font-medium ${theme === "dark" ? "text-slate-100" : ""}`}>主题与样式</h3>
+                  </div>
+                  <div className="space-y-5">
+                    <div>
+                      <Label
+                        htmlFor="theme-style-select"
+                        className={`mb-2 block ${theme === "dark" ? "text-slate-200" : ""}`}
+                      >
+                        主题风格
+                      </Label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {["default", "github", "notion", "chatgpt"].map((style) => (
+                          <div
+                            key={style}
+                            className={`cursor-pointer rounded-lg overflow-hidden border transition-all ${
+                              themeStyle === style
+                                ? "ring-2 ring-primary"
+                                : theme === "dark"
+                                  ? "border-slate-700"
+                                  : "border-slate-200"
+                            }`}
+                            onClick={() => setThemeStyle(style)}
+                          >
+                            <ThemePreview
+                              themeName={style}
+                              isDark={theme === "dark"}
+                              isSelected={themeStyle === style}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="font-size" className={`mb-2 block ${theme === "dark" ? "text-slate-200" : ""}`}>
+                        字体大小: {fontSize}px
+                      </Label>
+                      <Slider
+                        id="font-size"
+                        min={12}
+                        max={24}
+                        step={1}
+                        value={[fontSize]}
+                        onValueChange={(value) => setFontSize(value[0])}
+                        className="mt-2"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="watermark" className={`mb-2 block ${theme === "dark" ? "text-slate-200" : ""}`}>
+                        水印文本
+                      </Label>
+                      <Textarea
+                        id="watermark"
+                        value={watermarkText}
+                        onChange={(e) => setWatermarkText(e.target.value)}
+                        className={`resize-none h-10 ${
+                          theme === "dark" ? "bg-slate-800 text-slate-100 border-slate-700" : ""
+                        }`}
+                        placeholder="输入导出图片的水印文本"
+                      />
                     </div>
                   </div>
-                  <div>
-                    <Label htmlFor="font-size" className={`mb-2 block ${theme === "dark" ? "text-slate-200" : ""}`}>
-                      字体大小: {fontSize}px
-                    </Label>
-                    <Slider
-                      id="font-size"
-                      min={12}
-                      max={24}
-                      step={1}
-                      value={[fontSize]}
-                      onValueChange={(value) => setFontSize(value[0])}
-                      className="mt-2"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="watermark" className={`mb-2 block ${theme === "dark" ? "text-slate-200" : ""}`}>
-                      水印文本
-                    </Label>
-                    <Textarea
-                      id="watermark"
-                      value={watermarkText}
-                      onChange={(e) => setWatermarkText(e.target.value)}
-                      className={`resize-none h-10 ${
-                        theme === "dark" ? "bg-slate-800 text-slate-100 border-slate-700" : ""
-                      }`}
-                      placeholder="输入导出图片的水印文本"
-                    />
-                  </div>
                 </div>
-              </div>
 
-              <div className="col-span-2">
-                <div className="flex items-center gap-2 mb-3">
-                  <FileDown className="h-5 w-5 text-primary" />
-                  <h3 className={`text-lg font-medium ${theme === "dark" ? "text-slate-100" : ""}`}>导出选项</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Button
-                    onClick={exportAsPDF}
-                    className="flex items-center gap-2 transition-all"
-                    disabled={isExporting !== null}
-                  >
-                    {isExporting === "pdf" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <FilePdf className="h-4 w-4" />
-                    )}
-                    导出为PDF
-                  </Button>
-                  <Button
-                    onClick={exportAsImage}
-                    className="flex items-center gap-2 transition-all"
-                    disabled={isExporting !== null}
-                  >
-                    {isExporting === "image" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <FileImage className="h-4 w-4" />
-                    )}
-                    导出为PNG
-                  </Button>
-                  <Button
-                    onClick={copyToClipboard}
-                    className="flex items-center gap-2 transition-all"
-                    disabled={isExporting !== null}
-                  >
-                    {isExporting === "clipboard" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Clipboard className="h-4 w-4" />
-                    )}
-                    复制到剪贴板
-                  </Button>
+                <div className="col-span-2">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileDown className="h-5 w-5 text-primary" />
+                    <h3 className={`text-lg font-medium ${theme === "dark" ? "text-slate-100" : ""}`}>导出选项</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Button
+                      onClick={exportAsPDF}
+                      className="flex items-center gap-2 transition-all"
+                      disabled={isExporting !== null}
+                    >
+                      {isExporting === "pdf" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <FilePdf className="h-4 w-4" />
+                      )}
+                      导出为PDF
+                    </Button>
+                    <Button
+                      onClick={exportAsImage}
+                      className="flex items-center gap-2 transition-all"
+                      disabled={isExporting !== null}
+                    >
+                      {isExporting === "image" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <FileImage className="h-4 w-4" />
+                      )}
+                      导出为PNG
+                    </Button>
+                    <Button
+                      onClick={copyToClipboard}
+                      className="flex items-center gap-2 transition-all"
+                      disabled={isExporting !== null}
+                    >
+                      {isExporting === "clipboard" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Clipboard className="h-4 w-4" />
+                      )}
+                      复制到剪贴板
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         <footer
-          className={`text-center py-4 border-t ${theme === "dark" ? "border-slate-800 text-slate-400" : "border-slate-200 text-muted-foreground"}`}
+          className={`text-center py-4 mt-6 border-t ${theme === "dark" ? "border-slate-800 text-slate-400" : "border-slate-200 text-muted-foreground"}`}
         >
           <div className="container mx-auto">
             <div className="flex flex-col md:flex-row justify-between items-center gap-2">

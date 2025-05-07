@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
 import ReactMarkdown from "react-markdown"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import {
@@ -19,16 +18,11 @@ import "./theme-styles.css"
 interface MarkdownPreviewProps {
   markdown: string
   themeStyle?: string
-  isDarkMode?: boolean
 }
 
-const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ markdown, themeStyle = "default", isDarkMode = false }) => {
-  const [mounted, setMounted] = useState(false)
-
-  // 只在客户端执行
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ markdown, themeStyle = "default" }) => {
+  // 通过检查父元素是否有dark类来检测是否处于暗色模式
+  const isDarkMode = document.querySelector(".markdown-preview.dark") !== null
 
   // 根据主题风格选择代码高亮样式
   const getCodeStyle = () => {
@@ -57,11 +51,6 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ markdown, themeStyle 
     }
   }
 
-  // 如果组件尚未挂载，返回一个占位符
-  if (!mounted) {
-    return <div className="prose prose-sm sm:prose lg:prose-lg max-w-none dark:prose-invert"></div>
-  }
-
   return (
     <ReactMarkdown
       className="prose prose-sm sm:prose lg:prose-lg max-w-none dark:prose-invert"
@@ -71,7 +60,16 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ markdown, themeStyle 
         code({ node, inline, className, children, ...props }) {
           const match = /language-(\w+)/.exec(className || "")
           return !inline && match ? (
-            <SyntaxHighlighter style={getCodeStyle()} language={match[1]} PreTag="div" {...props}>
+            <SyntaxHighlighter
+              style={getCodeStyle()}
+              language={match[1]}
+              PreTag="div"
+              {...props}
+              customStyle={{
+                margin: "1.5em 0",
+                borderRadius: "6px",
+              }}
+            >
               {String(children).replace(/\n$/, "")}
             </SyntaxHighlighter>
           ) : (
@@ -80,9 +78,37 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ markdown, themeStyle 
             </code>
           )
         },
+        p({ node, children, ...props }) {
+          return (
+            <p style={{ marginBottom: "1.2em", lineHeight: "1.8" }} {...props}>
+              {children}
+            </p>
+          )
+        },
+        ul({ node, children, ...props }) {
+          return (
+            <ul style={{ marginBottom: "1.2em", paddingLeft: "1.5em" }} {...props}>
+              {children}
+            </ul>
+          )
+        },
+        ol({ node, children, ...props }) {
+          return (
+            <ol style={{ marginBottom: "1.2em", paddingLeft: "1.5em" }} {...props}>
+              {children}
+            </ol>
+          )
+        },
+        li({ node, children, ...props }) {
+          return (
+            <li style={{ marginBottom: "0.5em" }} {...props}>
+              {children}
+            </li>
+          )
+        },
         table({ node, ...props }) {
           return (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto my-6">
               <table className="border-collapse border border-slate-300 dark:border-slate-700 w-full" {...props} />
             </div>
           )
@@ -99,10 +125,30 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ markdown, themeStyle 
           return <td className="border border-slate-300 dark:border-slate-700 px-4 py-2" {...props} />
         },
         img({ node, ...props }) {
-          return <img className="max-w-full h-auto rounded-md" {...props} loading="lazy" />
+          return <img className="max-w-full h-auto rounded-md my-6" {...props} loading="lazy" />
         },
         blockquote({ node, ...props }) {
-          return <blockquote className="border-l-4 border-slate-300 dark:border-slate-700 pl-4 italic" {...props} />
+          return (
+            <blockquote className="border-l-4 border-slate-300 dark:border-slate-700 pl-4 italic my-6" {...props} />
+          )
+        },
+        h1({ node, ...props }) {
+          return <h1 style={{ marginTop: "1.5em", marginBottom: "0.75em" }} {...props} />
+        },
+        h2({ node, ...props }) {
+          return <h2 style={{ marginTop: "1.5em", marginBottom: "0.75em" }} {...props} />
+        },
+        h3({ node, ...props }) {
+          return <h3 style={{ marginTop: "1.5em", marginBottom: "0.75em" }} {...props} />
+        },
+        h4({ node, ...props }) {
+          return <h4 style={{ marginTop: "1.5em", marginBottom: "0.75em" }} {...props} />
+        },
+        h5({ node, ...props }) {
+          return <h5 style={{ marginTop: "1.5em", marginBottom: "0.75em" }} {...props} />
+        },
+        h6({ node, ...props }) {
+          return <h6 style={{ marginTop: "1.5em", marginBottom: "0.75em" }} {...props} />
         },
       }}
     >
