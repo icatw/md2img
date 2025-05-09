@@ -40,8 +40,8 @@
 }
 
 .markdown-preview.dark.theme-github {
-  --heading-color: #c9d1d9;
-  --text-color: #c9d1d9;
+  --heading-color: #ffffff;
+  --text-color: #e6e6e6;
   --link-color: #58a6ff;
   --code-bg: #161b22;
   --blockquote-color: #8b949e;
@@ -68,12 +68,12 @@
 
 .markdown-preview.dark.theme-notion {
   --heading-color: #ffffff;
-  --text-color: #e0e0e0;
+  --text-color: #ededed;
   --link-color: #529cca;
   --code-bg: #3f4447;
-  --blockquote-color: #9b9a97;
-  --blockquote-border: #4a4a4a;
-  --table-border: #4a4a4a;
+  --blockquote-color: #b9b9b7;
+  --blockquote-border: #5a5a5a;
+  --table-border: #5a5a5a;
   --table-header-bg: #3f4447;
   line-height: 1.8;
 }
@@ -93,9 +93,9 @@
 }
 
 .markdown-preview.dark.theme-chatgpt {
-  --heading-color: #d1d5db;
+  --heading-color: #ffffff;
   --text-color: #ececf1;
-  --link-color: #10a37f;
+  --link-color: #19c37d;
   --code-bg: #2a2b32;
   --blockquote-color: #acacbe;
   --blockquote-border: #4d4d4f;

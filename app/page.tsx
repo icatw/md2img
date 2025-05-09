@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Slider } from "@/components/ui/slider"
@@ -16,26 +16,42 @@ import {
   Upload,
   Moon,
   Sun,
-  FileDown,
   Clipboard,
   Settings,
   Github,
-  FileText,
   Loader2,
   Eye,
   Edit,
+  FileText,
+  Save,
+  Download,
+  FileCode,
+  Keyboard,
+  Info,
 } from "lucide-react"
 import dynamic from "next/dynamic"
 import { jsPDF } from "jspdf"
 import html2canvas from "html2canvas"
 import "@/components/theme-styles.css"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 // 动态导入依赖浏览器环境的组件
 const MarkdownPreview = dynamic(() => import("@/components/markdown-preview"), { ssr: false })
 const ThemePreview = dynamic(() => import("@/components/theme-preview"), { ssr: false })
 
+// 修改主函数开始部分，增强夜间模式的对比度
 export default function Home() {
   const [markdown, setMarkdown] = useState<string>("")
   const [theme, setTheme] = useState<string>("light")
@@ -43,7 +59,6 @@ export default function Home() {
   const [fontSize, setFontSize] = useState<number>(16)
   const previewRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<HTMLTextAreaElement>(null)
-  const lineNumbersRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isExporting, setIsExporting] = useState<string | null>(null)
@@ -55,6 +70,16 @@ export default function Home() {
   const [autoValidate, setAutoValidate] = useState<boolean>(true)
   const [lineCount, setLineCount] = useState<number>(0)
   const [isMounted, setIsMounted] = useState<boolean>(false)
+  const [wordCount, setWordCount] = useState<number>(0)
+  const [charCount, setCharCount] = useState<number>(0)
+  const [readingTime, setReadingTime] = useState<number>(0)
+  const [lastSaved, setLastSaved] = useState<string | null>(null)
+  const [autoSave, setAutoSave] = useState<boolean>(true)
+  const [autoSaveInterval, setAutoSaveInterval] = useState<number>(60) // 秒
+  const [exportProgress, setExportProgress] = useState<number>(0)
+  const [showShortcutsDialog, setShowShortcutsDialog] = useState<boolean>(false)
+  const [showAboutDialog, setShowAboutDialog] = useState<boolean>(false)
+  const [isDragging, setIsDragging] = useState<boolean>(false)
 
   // 根据主题和风格获取背景颜色
   const getBackgroundColor = (theme: string, style: string): string => {
@@ -117,14 +142,102 @@ function factorial(n) {
 | 代码 | 语法高亮 | ✅ |
 `
 
+  // 更新字数统计
+  const updateWordCount = useCallback((text: string) => {
+    // 移除代码块内容以避免统计代码
+    const textWithoutCodeBlocks = text.replace(/```[\s\S]*?```/g, "")
+
+    // 计算字符数（不包括空格和换行符）
+    const chars = textWithoutCodeBlocks.replace(/\s/g, "").length
+
+    // 计算单词数（中文按字符计算，英文按空格分隔计算）
+    // 中文字符范围
+    const chineseChars = textWithoutCodeBlocks.match(/[\u4e00-\u9fa5]/g) || []
+    // 英文单词
+    const englishWords = textWithoutCodeBlocks.match(/[a-zA-Z]+/g) || []
+
+    const words = chineseChars.length + englishWords.length
+
+    // 估算阅读时间（假设平均阅读速度为每分钟300字/词）
+    const time = Math.ceil(words / 300)
+
+    setCharCount(chars)
+    setWordCount(words)
+    setReadingTime(time)
+  }, [])
+
+  // 自动保存功能
+  useEffect(() => {
+    if (!isMounted || !autoSave || !markdown) return
+
+    const saveInterval = setInterval(() => {
+      localStorage.setItem("markdown-content", markdown)
+      const now = new Date()
+      setLastSaved(now.toLocaleTimeString())
+
+      toast({
+        title: "已自动保存",
+        description: `内容已在 ${now.toLocaleTimeString()} 自动保存`,
+        duration: 2000,
+      })
+    }, autoSaveInterval * 1000)
+
+    return () => clearInterval(saveInterval)
+  }, [isMounted, autoSave, autoSaveInterval, markdown, toast])
+
+  // 键盘快捷键处理
+  useEffect(() => {
+    if (!isMounted) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + S: 保存
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault()
+        localStorage.setItem("markdown-content", markdown)
+        const now = new Date()
+        setLastSaved(now.toLocaleTimeString())
+
+        toast({
+          title: "已保存",
+          description: `内容已在 ${now.toLocaleTimeString()} 保存`,
+          duration: 2000,
+        })
+      }
+
+      // Ctrl/Cmd + P: 预览
+      if ((e.ctrlKey || e.metaKey) && e.key === "p") {
+        e.preventDefault()
+        setShowEditor(false)
+        setActiveTab("preview")
+      }
+
+      // Ctrl/Cmd + E: 编辑
+      if ((e.ctrlKey || e.metaKey) && e.key === "e") {
+        e.preventDefault()
+        setShowEditor(true)
+        setActiveTab("edit")
+      }
+
+      // Ctrl/Cmd + ,: 设置
+      if ((e.ctrlKey || e.metaKey) && e.key === ",") {
+        e.preventDefault()
+        setShowSettings(!showSettings)
+      }
+
+      // Ctrl/Cmd + K: 快捷键帮助
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault()
+        setShowShortcutsDialog(true)
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [isMounted, markdown, showSettings, toast])
+
   // 确保组件只在客户端渲染
   useEffect(() => {
     setIsMounted(true)
-
-    // 为首次使用的用户设置示例Markdown
-    if (!markdown) {
-      setMarkdown(sampleMarkdown)
-    }
 
     // 尝试从localStorage加载保存的内容和设置
     const savedMarkdown = localStorage.getItem("markdown-content")
@@ -133,14 +246,26 @@ function factorial(n) {
     const savedFontSize = localStorage.getItem("markdown-font-size")
     const savedShowEditor = localStorage.getItem("markdown-show-editor")
     const savedAutoValidate = localStorage.getItem("markdown-auto-validate")
+    const savedAutoSave = localStorage.getItem("markdown-auto-save")
+    const savedAutoSaveInterval = localStorage.getItem("markdown-auto-save-interval")
 
-    if (savedMarkdown) setMarkdown(savedMarkdown)
+    // 为首次使用的用户设置示例Markdown
+    if (savedMarkdown) {
+      setMarkdown(savedMarkdown)
+      updateWordCount(savedMarkdown)
+    } else {
+      setMarkdown(sampleMarkdown)
+      updateWordCount(sampleMarkdown)
+    }
+
     if (savedTheme) setTheme(savedTheme)
     if (savedThemeStyle) setThemeStyle(savedThemeStyle)
     if (savedFontSize) setFontSize(Number.parseInt(savedFontSize, 10))
     if (savedShowEditor !== null) setShowEditor(savedShowEditor === "true")
     if (savedAutoValidate !== null) setAutoValidate(savedAutoValidate === "true")
-  }, [])
+    if (savedAutoSave !== null) setAutoSave(savedAutoSave === "true")
+    if (savedAutoSaveInterval) setAutoSaveInterval(Number.parseInt(savedAutoSaveInterval, 10))
+  }, [updateWordCount])
 
   // 保存内容和设置到localStorage
   useEffect(() => {
@@ -152,7 +277,9 @@ function factorial(n) {
     localStorage.setItem("markdown-font-size", fontSize.toString())
     localStorage.setItem("markdown-show-editor", showEditor.toString())
     localStorage.setItem("markdown-auto-validate", autoValidate.toString())
-  }, [markdown, theme, themeStyle, fontSize, showEditor, autoValidate, isMounted])
+    localStorage.setItem("markdown-auto-save", autoSave.toString())
+    localStorage.setItem("markdown-auto-save-interval", autoSaveInterval.toString())
+  }, [markdown, theme, themeStyle, fontSize, showEditor, autoValidate, autoSave, autoSaveInterval, isMounted])
 
   // 清理临时图片URL
   useEffect(() => {
@@ -174,20 +301,21 @@ function factorial(n) {
 
   // 同步滚动行号和编辑器
   useEffect(() => {
-    if (!isMounted) return
+    if (!isMounted || !editorRef.current) return
 
-    const handleEditorScroll = () => {
-      if (editorRef.current && lineNumbersRef.current) {
-        lineNumbersRef.current.scrollTop = editorRef.current.scrollTop
+    const editor = editorRef.current
+    const handleScroll = () => {
+      // 获取编辑器的父元素中的第一个子元素（行号容器）
+      const lineNumbersContainer = editor.parentElement?.firstElementChild
+      if (lineNumbersContainer) {
+        lineNumbersContainer.scrollTop = editor.scrollTop
       }
     }
 
-    const editor = editorRef.current
-    if (editor) {
-      editor.addEventListener("scroll", handleEditorScroll)
-      return () => {
-        editor.removeEventListener("scroll", handleEditorScroll)
-      }
+    editor.addEventListener("scroll", handleScroll)
+
+    return () => {
+      editor.removeEventListener("scroll", handleScroll)
     }
   }, [isMounted])
 
@@ -198,6 +326,7 @@ function factorial(n) {
       reader.onload = (e) => {
         const content = e.target?.result as string
         setMarkdown(content)
+        updateWordCount(content)
         if (autoValidate) validateMarkdown(content)
       }
       reader.readAsText(file)
@@ -208,23 +337,37 @@ function factorial(n) {
     }
   }
 
-  // 文件拖放处理
+  // 文件拖放处理 - 增强版本
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     e.stopPropagation()
-    e.currentTarget.classList.add("border-primary")
+    setIsDragging(true)
+  }
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
   }
 
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     e.stopPropagation()
-    e.currentTarget.classList.remove("border-primary")
+
+    // 检查是否真的离开了容器，而不是进入了子元素
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX
+    const y = e.clientY
+
+    if (x <= rect.left || x >= rect.right || y <= rect.top || y >= rect.bottom) {
+      setIsDragging(false)
+    }
   }
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     e.stopPropagation()
-    e.currentTarget.classList.remove("border-primary")
+    setIsDragging(false)
 
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0]
@@ -233,6 +376,7 @@ function factorial(n) {
         reader.onload = (e) => {
           const content = e.target?.result as string
           setMarkdown(content)
+          updateWordCount(content)
           if (autoValidate) validateMarkdown(content)
         }
         reader.readAsText(file)
@@ -281,6 +425,7 @@ function factorial(n) {
     if (!previewRef.current) return
 
     setIsExporting("pdf")
+    setExportProgress(10)
     toast({
       title: "正在生成PDF",
       description: "请稍候，我们正在准备您的PDF...",
@@ -291,6 +436,7 @@ function factorial(n) {
       const originalStyle = previewRef.current.style.cssText
       previewRef.current.style.paddingBottom = "60px" // 为水印添加额外空间
 
+      setExportProgress(30)
       const canvas = await html2canvas(previewRef.current, {
         scale: 2,
         useCORS: true,
@@ -303,6 +449,7 @@ function factorial(n) {
       // 恢复原始样式
       previewRef.current.style.cssText = originalStyle
 
+      setExportProgress(60)
       // 添加水印
       const canvasWithWatermark = addWatermark(canvas, watermarkText)
 
@@ -312,12 +459,14 @@ function factorial(n) {
         unit: "mm",
       })
 
+      setExportProgress(80)
       const imgWidth = 210 // A4宽度（毫米）
       const imgHeight = (canvas.height * imgWidth) / canvas.width
 
       pdf.addImage(imgData, "JPEG", 0, 0, imgWidth, imgHeight)
       pdf.save("markdown-export.pdf")
 
+      setExportProgress(100)
       toast({
         title: "PDF已导出",
         description: "您的PDF已成功下载。",
@@ -330,6 +479,7 @@ function factorial(n) {
       })
     } finally {
       setIsExporting(null)
+      setExportProgress(0)
       // 如果之前是编辑模式，恢复
       if (wasInEditMode) {
         setActiveTab("edit")
@@ -351,6 +501,7 @@ function factorial(n) {
     if (!previewRef.current) return
 
     setIsExporting("image")
+    setExportProgress(10)
     toast({
       title: "正在生成图片",
       description: "请稍候，我们正在准备您的图片...",
@@ -361,6 +512,7 @@ function factorial(n) {
       const originalStyle = previewRef.current.style.cssText
       previewRef.current.style.paddingBottom = "60px" // 为水印添加额外空间
 
+      setExportProgress(40)
       const canvas = await html2canvas(previewRef.current, {
         scale: 2,
         useCORS: true,
@@ -373,6 +525,7 @@ function factorial(n) {
       // 恢复原始样式
       previewRef.current.style.cssText = originalStyle
 
+      setExportProgress(70)
       // 添加水印
       const canvasWithWatermark = addWatermark(canvas, watermarkText)
 
@@ -381,6 +534,7 @@ function factorial(n) {
       link.href = canvasWithWatermark.toDataURL("image/png")
       link.click()
 
+      setExportProgress(100)
       toast({
         title: "图片已导出",
         description: "您的图片已成功下载。",
@@ -393,10 +547,156 @@ function factorial(n) {
       })
     } finally {
       setIsExporting(null)
+      setExportProgress(0)
       // 如果之前是编辑模式，恢复
       if (wasInEditMode) {
         setActiveTab("edit")
       }
+    }
+  }
+
+  // 导出为HTML
+  const exportAsHTML = () => {
+    if (!previewRef.current) return
+
+    setIsExporting("html")
+    setExportProgress(30)
+
+    try {
+      // 创建一个新的HTML文档
+      const htmlContent = `
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Markdown导出</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 16px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    code {
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      background-color: #f5f5f5;
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 16px 0;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f5f5f5;
+    }
+    blockquote {
+      border-left: 4px solid #ddd;
+      padding-left: 16px;
+      margin-left: 0;
+      color: #666;
+    }
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      color: #666;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  ${previewRef.current.innerHTML}
+  <div class="footer">
+    ${watermarkText}
+  </div>
+</body>
+</html>
+      `
+
+      setExportProgress(70)
+
+      // 创建Blob对象
+      const blob = new Blob([htmlContent], { type: "text/html" })
+      const url = URL.createObjectURL(blob)
+
+      // 创建下载链接
+      const link = document.createElement("a")
+      link.href = url
+      link.download = "markdown-export.html"
+      link.click()
+
+      // 释放URL对象
+      URL.revokeObjectURL(url)
+
+      setExportProgress(100)
+      toast({
+        title: "HTML已导出",
+        description: "您的HTML文件已成功下载。",
+      })
+    } catch (error) {
+      toast({
+        title: "导出失败",
+        description: "导出HTML时出现错误。",
+        variant: "destructive",
+      })
+    } finally {
+      setIsExporting(null)
+      setExportProgress(0)
+    }
+  }
+
+  // 导出为纯文本
+  const exportAsText = () => {
+    setIsExporting("text")
+    setExportProgress(50)
+
+    try {
+      // 创建Blob对象
+      const blob = new Blob([markdown], { type: "text/plain" })
+      const url = URL.createObjectURL(blob)
+
+      // 创建下载链接
+      const link = document.createElement("a")
+      link.href = url
+      link.download = "markdown-export.md"
+      link.click()
+
+      // 释放URL对象
+      URL.revokeObjectURL(url)
+
+      setExportProgress(100)
+      toast({
+        title: "Markdown已导出",
+        description: "您的Markdown文件已成功下载。",
+      })
+    } catch (error) {
+      toast({
+        title: "导出失败",
+        description: "导出Markdown时出现错误。",
+        variant: "destructive",
+      })
+    } finally {
+      setIsExporting(null)
+      setExportProgress(0)
     }
   }
 
@@ -415,6 +715,7 @@ function factorial(n) {
     if (!previewRef.current) return
 
     setIsExporting("clipboard")
+    setExportProgress(10)
     toast({
       title: "正在复制到剪贴板",
       description: "请稍候，我们正在准备您的图片...",
@@ -425,6 +726,7 @@ function factorial(n) {
       const originalStyle = previewRef.current.style.cssText
       previewRef.current.style.paddingBottom = "60px" // 为水印添加额外空间
 
+      setExportProgress(40)
       const canvas = await html2canvas(previewRef.current, {
         scale: 2,
         useCORS: true,
@@ -437,6 +739,7 @@ function factorial(n) {
       // 恢复原始样式
       previewRef.current.style.cssText = originalStyle
 
+      setExportProgress(70)
       // 添加水印
       const canvasWithWatermark = addWatermark(canvas, watermarkText)
 
@@ -452,6 +755,7 @@ function factorial(n) {
             // 尝试直接写入剪贴板
             await navigator.clipboard.write([clipboardItem])
 
+            setExportProgress(100)
             toast({
               title: "已复制到剪贴板",
               description: "图片已成功复制到剪贴板，您可以直接粘贴到其他应用中。",
@@ -548,11 +852,31 @@ function factorial(n) {
       })
     } finally {
       setIsExporting(null)
+      setExportProgress(0)
       // 如果之前是编辑模式，恢复
       if (wasInEditMode) {
         setActiveTab("edit")
       }
     }
+  }
+
+  // 复制Markdown文本
+  const copyMarkdownText = () => {
+    navigator.clipboard
+      .writeText(markdown)
+      .then(() => {
+        toast({
+          title: "已复制Markdown文本",
+          description: "Markdown文本已复制到剪贴板。",
+        })
+      })
+      .catch(() => {
+        toast({
+          title: "复制失败",
+          description: "复制Markdown文本时出现错误。",
+          variant: "destructive",
+        })
+      })
   }
 
   const toggleFullscreen = () => {
@@ -567,6 +891,19 @@ function factorial(n) {
 
   const toggleSettings = () => {
     setShowSettings(!showSettings)
+  }
+
+  // 手动保存
+  const saveMarkdown = () => {
+    localStorage.setItem("markdown-content", markdown)
+    const now = new Date()
+    setLastSaved(now.toLocaleTimeString())
+
+    toast({
+      title: "已保存",
+      description: `内容已在 ${now.toLocaleTimeString()} 保存`,
+      duration: 2000,
+    })
   }
 
   // 自动验证功能
@@ -602,6 +939,7 @@ function factorial(n) {
   const handleMarkdownChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newContent = e.target.value
     setMarkdown(newContent)
+    updateWordCount(newContent)
     validateMarkdown(newContent)
   }
 
@@ -621,45 +959,55 @@ function factorial(n) {
 
   return (
     <main
-      className={`min-h-screen transition-colors duration-300 ${theme === "dark" ? "bg-slate-900 text-white" : "bg-white text-black"}`}
+      className={`min-h-screen transition-colors duration-300 ${theme === "dark" ? "bg-slate-900 text-slate-100" : "bg-white text-black"}`}
     >
       {/* 顶部导航栏 */}
       <header
-        className={`sticky top-0 z-10 border-b ${theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200"} py-3 px-4 md:px-8`}
+        className={`sticky top-0 z-10 border-b ${theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200"} py-2 md:py-3 px-2 md:px-8`}
       >
         <div className="container mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <FileText className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-bold">Markdown编辑器</h1>
-            <p className="text-sm text-muted-foreground hidden md:block">编辑Markdown并查看实时预览</p>
+            <div className="relative w-8 h-8 md:w-10 md:h-10 overflow-hidden">
+              <img
+                src="https://blog-icatwms.oss-cn-beijing.aliyuncs.com/logo.png"
+                alt="Markdown编辑器"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <h1 className={`text-lg md:text-xl font-bold ${theme === "dark" ? "text-white" : ""}`}>Markdown编辑器</h1>
+            <p className={`text-sm hidden md:block ${theme === "dark" ? "text-slate-300" : "text-muted-foreground"}`}>
+              编辑Markdown并查看实时预览
+            </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <a
-                    href="https://github.com"
+                    href="https://github.com/icatw/md2img"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`p-2 rounded-full transition-colors ${theme === "dark" ? "hover:bg-slate-800" : "hover:bg-slate-100"}`}
+                    className={`p-1.5 md:p-2 rounded-full transition-colors ${theme === "dark" ? "hover:bg-slate-800 text-slate-300" : "hover:bg-slate-100"}`}
                   >
-                    <Github className="h-5 w-5" />
+                    <Github className="h-4 w-4 md:h-5 md:w-5" />
                   </a>
                 </TooltipTrigger>
-                <TooltipContent>
+                <TooltipContent className={theme === "dark" ? "bg-slate-800 text-white border-slate-700" : ""}>
                   <p>查看源代码</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
 
-            <div className="flex items-center gap-1 border rounded-full p-1 px-2">
-              <Sun className="h-4 w-4" />
+            <div
+              className={`flex items-center gap-1 border rounded-full p-1 px-2 ${theme === "dark" ? "border-slate-700 bg-slate-800" : ""}`}
+            >
+              <Sun className="h-3 w-3 md:h-4 md:w-4 text-yellow-500" />
               <Switch
                 checked={theme === "dark"}
                 onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
-                className="mx-1"
+                className={`mx-1 ${theme === "dark" ? "bg-slate-700 data-[state=checked]:bg-primary" : ""}`}
               />
-              <Moon className="h-4 w-4" />
+              <Moon className="h-3 w-3 md:h-4 md:w-4 text-slate-400" />
             </div>
           </div>
         </div>
@@ -667,8 +1015,9 @@ function factorial(n) {
 
       {/* 工具栏 */}
       <div className={`border-b ${theme === "dark" ? "border-slate-700" : "border-slate-200"}`}>
-        <div className="container mx-auto py-2 px-4 md:px-8">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="container mx-auto py-2 px-2 md:px-8">
+          {/* 桌面版工具栏 - 在移动端隐藏 */}
+          <div className="hidden md:flex md:flex-wrap md:items-center md:justify-between md:gap-2">
             <div className="flex items-center gap-3">
               {/* 编辑/预览切换按钮组 */}
               <div className="flex border rounded-md overflow-hidden">
@@ -679,7 +1028,15 @@ function factorial(n) {
                     setShowEditor(true)
                     setActiveTab("edit")
                   }}
-                  className={`rounded-none ${showEditor ? "bg-primary text-primary-foreground" : ""}`}
+                  className={`rounded-none ${
+                    theme === "dark"
+                      ? showEditor
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-slate-800 text-white hover:bg-slate-700"
+                      : showEditor
+                        ? "bg-primary text-primary-foreground"
+                        : ""
+                  }`}
                 >
                   <Edit className="h-4 w-4 mr-1" />
                   编辑Markdown
@@ -691,27 +1048,46 @@ function factorial(n) {
                     setShowEditor(false)
                     setActiveTab("preview")
                   }}
-                  className={`rounded-none ${!showEditor ? "bg-primary text-primary-foreground" : ""}`}
+                  className={`rounded-none ${
+                    theme === "dark"
+                      ? !showEditor
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-slate-800 text-white hover:bg-slate-700"
+                      : !showEditor
+                        ? "bg-primary text-primary-foreground"
+                        : ""
+                  }`}
                 >
                   <Eye className="h-4 w-4 mr-1" />
                   预览
                 </Button>
               </div>
 
-              <div className="flex items-center gap-1 border rounded-md px-2 py-1">
-                <span className="text-sm">自动验证</span>
+              <div
+                className={`flex items-center gap-1 border rounded-md px-2 py-1 ${theme === "dark" ? "border-slate-600 bg-slate-800" : ""}`}
+              >
+                <span className={`text-sm ${theme === "dark" ? "text-white" : ""}`}>自动验证</span>
                 <Switch size="sm" checked={autoValidate} onCheckedChange={setAutoValidate} />
               </div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => document.getElementById("file-upload")?.click()}
-                className="flex items-center gap-1"
-              >
-                <Upload className="h-4 w-4 mr-1" />
-                导入Markdown .md
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={theme === "dark" ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => document.getElementById("file-upload")?.click()}
+                      className={`flex items-center gap-1 ${theme === "dark" ? "bg-slate-800 text-white border-slate-600 hover:bg-slate-700" : ""}`}
+                    >
+                      <Upload className="h-4 w-4 mr-1" />
+                      导入Markdown
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent className={theme === "dark" ? "bg-slate-800 text-white border-slate-700" : ""}>
+                    <p>导入Markdown文件</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <input
                 id="file-upload"
                 type="file"
@@ -719,75 +1095,344 @@ function factorial(n) {
                 className="hidden"
                 onChange={handleFileUpload}
               />
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={theme === "dark" ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={saveMarkdown}
+                      className={`flex items-center gap-1 ${theme === "dark" ? "bg-slate-800 text-white border-slate-600 hover:bg-slate-700" : ""}`}
+                    >
+                      <Save className="h-4 w-4 mr-1" />
+                      保存
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent className={theme === "dark" ? "bg-slate-800 text-white border-slate-700" : ""}>
+                    <p>保存当前内容 (Ctrl+S)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
 
             <div className="flex items-center gap-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={theme === "dark" ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={copyToClipboard}
+                      disabled={isExporting !== null}
+                      className={`flex items-center gap-1 ${theme === "dark" ? "bg-slate-800 text-white border-slate-600 hover:bg-slate-700 disabled:bg-slate-900 disabled:text-slate-500" : ""}`}
+                    >
+                      {isExporting === "clipboard" ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                      ) : (
+                        <Clipboard className="h-4 w-4 mr-1" />
+                      )}
+                      复制为图片
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent className={theme === "dark" ? "bg-slate-800 text-white border-slate-700" : ""}>
+                    <p>复制为图片</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button
+                    variant={theme === "dark" ? "secondary" : "outline"}
+                    size="sm"
+                    className={`flex items-center gap-1 ${theme === "dark" ? "bg-slate-800 text-white border-slate-600 hover:bg-slate-700" : ""}`}
+                  >
+                    <Download className="h-4 w-4 mr-1" />
+                    导出
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className={theme === "dark" ? "bg-slate-800 border-slate-700 text-white" : ""}>
+                  <DialogHeader>
+                    <DialogTitle>选择导出格式</DialogTitle>
+                    <DialogDescription className={theme === "dark" ? "text-slate-300" : ""}>
+                      选择您想要导出的文件格式
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid grid-cols-2 gap-4 py-4">
+                    <Button
+                      variant={theme === "dark" ? "secondary" : "outline"}
+                      onClick={exportAsPDF}
+                      disabled={isExporting !== null}
+                      className={`flex items-center justify-center gap-2 ${theme === "dark" ? "bg-slate-700 hover:bg-slate-600 text-white" : ""}`}
+                    >
+                      <FilePdf className="h-5 w-5" />
+                      PDF文档
+                    </Button>
+                    <Button
+                      variant={theme === "dark" ? "secondary" : "outline"}
+                      onClick={exportAsImage}
+                      disabled={isExporting !== null}
+                      className={`flex items-center justify-center gap-2 ${theme === "dark" ? "bg-slate-700 hover:bg-slate-600 text-white" : ""}`}
+                    >
+                      <FileImage className="h-5 w-5" />
+                      PNG图片
+                    </Button>
+                    <Button
+                      variant={theme === "dark" ? "secondary" : "outline"}
+                      onClick={exportAsHTML}
+                      disabled={isExporting !== null}
+                      className={`flex items-center justify-center gap-2 ${theme === "dark" ? "bg-slate-700 hover:bg-slate-600 text-white" : ""}`}
+                    >
+                      <FileCode className="h-5 w-5" />
+                      HTML网页
+                    </Button>
+                    <Button
+                      variant={theme === "dark" ? "secondary" : "outline"}
+                      onClick={exportAsText}
+                      disabled={isExporting !== null}
+                      className={`flex items-center justify-center gap-2 ${theme === "dark" ? "bg-slate-700 hover:bg-slate-600 text-white" : ""}`}
+                    >
+                      <FileText className="h-5 w-5" />
+                      Markdown文本
+                    </Button>
+                  </div>
+                  {isExporting && (
+                    <div className="mt-2">
+                      <p className="text-sm mb-2">正在导出 {isExporting.toUpperCase()} 文件...</p>
+                      <Progress value={exportProgress} className="h-2" />
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={theme === "dark" ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={toggleSettings}
+                      className={`flex items-center gap-1 ${theme === "dark" ? "bg-slate-800 text-white border-slate-600 hover:bg-slate-700" : ""}`}
+                    >
+                      <Settings className="h-4 w-4 mr-1" />
+                      设置
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent className={theme === "dark" ? "bg-slate-800 text-white border-slate-700" : ""}>
+                    <p>打开设置面板 (Ctrl+,)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={theme === "dark" ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => setShowShortcutsDialog(true)}
+                      className={`flex items-center gap-1 ${theme === "dark" ? "bg-slate-800 text-white border-slate-600 hover:bg-slate-700" : ""}`}
+                    >
+                      <Keyboard className="h-4 w-4 mr-1" />
+                      快捷键
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent className={theme === "dark" ? "bg-slate-800 text-white border-slate-700" : ""}>
+                    <p>查看键盘快捷键 (Ctrl+K)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          </div>
+
+          {/* 移动端工具栏 - 在桌面端隐藏 */}
+          <div className="md:hidden">
+            {/* 主要功能按钮 */}
+            <div className="grid grid-cols-2 gap-2 mb-2">
               <Button
-                variant="outline"
+                variant={activeTab === "edit" ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setShowEditor(true)
+                  setActiveTab("edit")
+                }}
+                className={`w-full ${
+                  theme === "dark"
+                    ? activeTab === "edit"
+                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                      : "bg-slate-800 text-white border-slate-600 hover:bg-slate-700 hover:text-white"
+                    : ""
+                }`}
+              >
+                <Edit className="h-4 w-4 mr-1" />
+                编辑
+              </Button>
+              <Button
+                variant={activeTab === "preview" ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setShowEditor(false)
+                  setActiveTab("preview")
+                }}
+                className={`w-full ${
+                  theme === "dark"
+                    ? activeTab === "preview"
+                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                      : "bg-slate-800 text-white border-slate-600 hover:bg-slate-700 hover:text-white"
+                    : ""
+                }`}
+              >
+                <Eye className="h-4 w-4 mr-1" />
+                预览
+              </Button>
+            </div>
+
+            {/* 次要功能按钮 - 带文字的版本 */}
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              <Button
+                variant={theme === "dark" ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => document.getElementById("file-upload")?.click()}
+                className={`flex items-center justify-center gap-1 ${theme === "dark" ? "border-slate-700 bg-slate-800 hover:bg-slate-700 text-white" : ""}`}
+              >
+                <Upload className="h-4 w-4" />
+                <span className="text-xs">导入</span>
+              </Button>
+
+              <Button
+                variant={theme === "dark" ? "secondary" : "outline"}
+                size="sm"
+                onClick={saveMarkdown}
+                className={`flex items-center justify-center gap-1 ${theme === "dark" ? "border-slate-700 bg-slate-800 hover:bg-slate-700 text-white" : ""}`}
+              >
+                <Save className="h-4 w-4" />
+                <span className="text-xs">保存</span>
+              </Button>
+
+              <Button
+                variant={theme === "dark" ? "secondary" : "outline"}
                 size="sm"
                 onClick={copyToClipboard}
                 disabled={isExporting !== null}
-                className="flex items-center gap-1"
+                className={`flex items-center justify-center gap-1 ${theme === "dark" ? "border-slate-700 bg-slate-800 hover:bg-slate-700 text-white" : ""}`}
               >
                 {isExporting === "clipboard" ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <Clipboard className="h-4 w-4 mr-1" />
+                  <Clipboard className="h-4 w-4" />
                 )}
-                复制
+                <span className="text-xs">复制</span>
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button
+                    variant={theme === "dark" ? "secondary" : "outline"}
+                    size="sm"
+                    className={`flex items-center justify-center gap-1 ${theme === "dark" ? "border-slate-700 bg-slate-800 hover:bg-slate-700 text-white" : ""}`}
+                  >
+                    <Download className="h-4 w-4" />
+                    <span className="text-xs">导出</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className={theme === "dark" ? "bg-slate-800 border-slate-700 text-white" : ""}>
+                  <DialogHeader>
+                    <DialogTitle>选择导出格式</DialogTitle>
+                    <DialogDescription className={theme === "dark" ? "text-slate-300" : ""}>
+                      选择您想要导出的文件格式
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid grid-cols-2 gap-4 py-4">
+                    <Button
+                      variant={theme === "dark" ? "secondary" : "outline"}
+                      onClick={exportAsPDF}
+                      disabled={isExporting !== null}
+                      className={`flex items-center justify-center gap-2 ${theme === "dark" ? "bg-slate-700 hover:bg-slate-600 text-white" : ""}`}
+                    >
+                      <FilePdf className="h-5 w-5" />
+                      PDF文档
+                    </Button>
+                    <Button
+                      variant={theme === "dark" ? "secondary" : "outline"}
+                      onClick={exportAsImage}
+                      disabled={isExporting !== null}
+                      className={`flex items-center justify-center gap-2 ${theme === "dark" ? "bg-slate-700 hover:bg-slate-600 text-white" : ""}`}
+                    >
+                      <FileImage className="h-5 w-5" />
+                      PNG图片
+                    </Button>
+                    <Button
+                      variant={theme === "dark" ? "secondary" : "outline"}
+                      onClick={exportAsHTML}
+                      disabled={isExporting !== null}
+                      className={`flex items-center justify-center gap-2 ${theme === "dark" ? "bg-slate-700 hover:bg-slate-600 text-white" : ""}`}
+                    >
+                      <FileCode className="h-5 w-5" />
+                      HTML网页
+                    </Button>
+                    <Button
+                      variant={theme === "dark" ? "secondary" : "outline"}
+                      onClick={exportAsText}
+                      disabled={isExporting !== null}
+                      className={`flex items-center justify-center gap-2 ${theme === "dark" ? "bg-slate-700 hover:bg-slate-600 text-white" : ""}`}
+                    >
+                      <FileText className="h-5 w-5" />
+                      Markdown文本
+                    </Button>
+                  </div>
+                  {isExporting && (
+                    <div className="mt-2">
+                      <p className="text-sm mb-2">正在导出 {isExporting.toUpperCase()} 文件...</p>
+                      <Progress value={exportProgress} className="h-2" />
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
+
+              <Button
+                variant={theme === "dark" ? "secondary" : "outline"}
+                size="sm"
+                onClick={toggleSettings}
+                className={`flex items-center justify-center gap-1 ${theme === "dark" ? "border-slate-700 bg-slate-800 hover:bg-slate-700 text-white" : ""}`}
+              >
+                <Settings className="h-4 w-4" />
+                <span className="text-xs">设置</span>
               </Button>
 
               <Button
-                variant="outline"
+                variant={theme === "dark" ? "secondary" : "outline"}
                 size="sm"
-                onClick={exportAsImage}
-                disabled={isExporting !== null}
-                className="flex items-center gap-1"
+                onClick={() => setShowShortcutsDialog(true)}
+                className={`flex items-center justify-center gap-1 ${theme === "dark" ? "border-slate-700 bg-slate-800 hover:bg-slate-700 text-white" : ""}`}
               >
-                {isExporting === "image" ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                ) : (
-                  <FileImage className="h-4 w-4 mr-1" />
-                )}
-                保存图片
+                <Keyboard className="h-4 w-4" />
+                <span className="text-xs">快捷键</span>
               </Button>
+            </div>
 
-              <Button
-                variant="outline"
+            {/* 自动验证开关 - 移动端 */}
+            <div
+              className={`flex items-center justify-between mt-2 px-3 py-2 rounded ${
+                theme === "dark" ? "bg-slate-800 border border-slate-600" : "bg-slate-100"
+              }`}
+            >
+              <span className={`text-sm font-medium ${theme === "dark" ? "text-white" : ""}`}>自动验证</span>
+              <Switch
                 size="sm"
-                onClick={exportAsPDF}
-                disabled={isExporting !== null}
-                className="flex items-center gap-1"
-              >
-                {isExporting === "pdf" ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                ) : (
-                  <FilePdf className="h-4 w-4 mr-1" />
-                )}
-                保存PDF
-              </Button>
-
-              <Button variant="outline" size="sm" onClick={toggleSettings} className="flex items-center gap-1">
-                <Settings className="h-4 w-4 mr-1" />
-                设置
-              </Button>
+                checked={autoValidate}
+                onCheckedChange={setAutoValidate}
+                className={theme === "dark" ? "bg-slate-700 data-[state=checked]:bg-primary" : ""}
+              />
             </div>
           </div>
         </div>
       </div>
 
       {/* 编辑器和预览区域 */}
-      <div className="container mx-auto p-4 md:p-6">
-        {/* 移动端标签切换 */}
-        <div className="md:hidden mb-4">
-          <Tabs defaultValue="edit" value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="edit">编辑</TabsTrigger>
-              <TabsTrigger value="preview">预览</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-
+      <div className="container mx-auto p-2 md:p-6">
         {/* 主要内容区域 */}
         <div className="flex flex-col md:flex-row gap-4">
           {/* 编辑器区域 - 可以切换显示/隐藏 */}
@@ -797,26 +1442,28 @@ function factorial(n) {
             >
               {/* 编辑器容器 */}
               <div
-                className={`relative border rounded-md transition-all h-[calc(100vh-220px)] overflow-hidden ${
+                className={`relative border rounded-md transition-all h-[calc(100vh-220px)] md:h-[calc(100vh-180px)] ${
                   theme === "dark" ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-slate-50"
-                }`}
+                } ${isDragging ? "border-primary border-2" : ""}`}
                 onDragOver={handleDragOver}
+                onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
               >
-                {/* 编辑器和行号的容器 */}
-                <div className="flex h-full relative">
-                  {/* 行号显示 */}
+                <div className="flex h-full">
+                  {/* 行号区域 - 使用固定宽度并设置overflow-hidden */}
                   <div
-                    ref={lineNumbersRef}
-                    className="w-10 bg-opacity-50 flex-shrink-0 text-xs text-muted-foreground font-mono pt-4 pb-8 text-right pr-2 overflow-hidden"
-                    style={{ height: "100%", overflowY: "hidden" }}
+                    className={`w-10 flex-shrink-0 overflow-hidden ${
+                      theme === "dark" ? "bg-slate-700 bg-opacity-50" : "bg-slate-100 bg-opacity-50"
+                    }`}
                   >
-                    {Array.from({ length: lineCount }).map((_, i) => (
-                      <div key={i} className="leading-6 h-6">
-                        {i + 1}
-                      </div>
-                    ))}
+                    <div className="pt-4 text-right pr-2 text-xs text-muted-foreground font-mono select-none">
+                      {Array.from({ length: lineCount }).map((_, i) => (
+                        <div key={i} className="h-6 leading-6">
+                          {i + 1}
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   {/* 文本编辑区域 */}
@@ -830,17 +1477,51 @@ function factorial(n) {
                         : "bg-slate-50 placeholder:text-slate-400"
                     }`}
                     placeholder="在此处输入或粘贴您的Markdown，或拖放.md文件到此处..."
-                    style={{ lineHeight: "1.5rem" }}
+                    style={{
+                      lineHeight: "1.5rem",
+                      fontSize: "0.875rem",
+                      letterSpacing: "normal",
+                      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                    }}
+                    spellCheck="false"
+                    data-gramm="false" // 禁用Grammarly等扩展，避免干扰行高
                   />
                 </div>
 
-                {/* 拖放提示 */}
-                <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                {/* 文件拖放指示器 */}
+                <div
+                  className={`absolute inset-0 bg-primary/20 flex items-center justify-center transition-opacity duration-300 pointer-events-none ${
+                    isDragging ? "opacity-100" : "opacity-0"
+                  }`}
+                >
                   <div
-                    className={`p-3 rounded-lg ${theme === "dark" ? "bg-slate-800" : "bg-white"} shadow-lg border border-dashed ${theme === "dark" ? "border-slate-600" : "border-slate-300"} opacity-90`}
+                    className={`p-6 rounded-lg ${theme === "dark" ? "bg-slate-800" : "bg-white"} shadow-lg border-2 border-primary`}
                   >
-                    <p className="text-center">拖放Markdown文件到此处</p>
+                    <Upload className="h-8 w-8 mx-auto mb-2 text-primary" />
+                    <p className="text-center font-medium">释放鼠标上传文件</p>
                   </div>
+                </div>
+              </div>
+
+              {/* 字数统计 */}
+              <div
+                className={`mt-2 flex items-center justify-between text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}
+              >
+                <div className="flex items-center gap-2">
+                  <span>{lineCount} 行</span>
+                  <span>|</span>
+                  <span>{wordCount} 字</span>
+                  <span>|</span>
+                  <span>{charCount} 字符</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span>预计阅读时间: {readingTime} 分钟</span>
+                  {lastSaved && (
+                    <>
+                      <span>|</span>
+                      <span>上次保存: {lastSaved}</span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -851,13 +1532,13 @@ function factorial(n) {
             className={`${activeTab !== "preview" && "hidden md:block"} ${showEditor ? "md:w-1/2" : "w-full"} transition-all duration-300`}
           >
             <div
-              className={`border rounded-md overflow-auto transition-all h-[calc(100vh-220px)] ${
+              className={`border rounded-md overflow-auto transition-all h-[calc(100vh-220px)] md:h-[calc(100vh-180px)] ${
                 isFullscreen ? "fixed inset-0 z-50 p-8" : ""
               } ${theme === "dark" ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200"}`}
             >
               <div
                 ref={previewRef}
-                className={`markdown-preview ${theme === "dark" ? "dark" : ""} theme-${themeStyle} p-6`}
+                className={`markdown-preview ${theme === "dark" ? "dark" : ""} theme-${themeStyle} p-4 md:p-6`}
                 style={{ fontSize: `${fontSize}px` }}
               >
                 <MarkdownPreview markdown={markdown} themeStyle={themeStyle} theme={theme} />
@@ -869,16 +1550,27 @@ function factorial(n) {
         {/* 设置面板 - 条件渲染 */}
         {showSettings && (
           <Card
-            className={`mt-6 transition-all ${theme === "dark" ? "bg-slate-800 border-slate-700 text-slate-100" : ""}`}
+            className={`mt-4 md:mt-6 transition-all ${theme === "dark" ? "bg-slate-800 border-slate-700 text-slate-100" : ""}`}
           >
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Settings className="h-5 w-5 text-primary" />
-                    <h3 className={`text-lg font-medium ${theme === "dark" ? "text-slate-100" : ""}`}>主题与样式</h3>
-                  </div>
-                  <div className="space-y-5">
+            <CardContent className="pt-4 md:pt-6 px-3 md:px-6">
+              <Tabs defaultValue="appearance" className="w-full">
+                <TabsList className={`grid grid-cols-3 mb-4 ${theme === "dark" ? "bg-slate-700" : ""}`}>
+                  <TabsTrigger
+                    value="appearance"
+                    className={theme === "dark" ? "data-[state=active]:bg-slate-600" : ""}
+                  >
+                    外观
+                  </TabsTrigger>
+                  <TabsTrigger value="editor" className={theme === "dark" ? "data-[state=active]:bg-slate-600" : ""}>
+                    编辑器
+                  </TabsTrigger>
+                  <TabsTrigger value="export" className={theme === "dark" ? "data-[state=active]:bg-slate-600" : ""}>
+                    导出
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="appearance">
+                  <div className="space-y-4 md:space-y-5">
                     <div>
                       <Label
                         htmlFor="theme-style-select"
@@ -886,7 +1578,7 @@ function factorial(n) {
                       >
                         主题风格
                       </Label>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 gap-2 md:gap-3">
                         {["default", "github", "notion", "chatgpt"].map((style) => (
                           <div
                             key={style}
@@ -922,6 +1614,49 @@ function factorial(n) {
                         className="mt-2"
                       />
                     </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="editor">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="auto-validate" className={theme === "dark" ? "text-slate-200" : ""}>
+                        自动验证Markdown语法
+                      </Label>
+                      <Switch id="auto-validate" checked={autoValidate} onCheckedChange={setAutoValidate} />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="auto-save" className={theme === "dark" ? "text-slate-200" : ""}>
+                        自动保存内容
+                      </Label>
+                      <Switch id="auto-save" checked={autoSave} onCheckedChange={setAutoSave} />
+                    </div>
+
+                    {autoSave && (
+                      <div>
+                        <Label
+                          htmlFor="auto-save-interval"
+                          className={`mb-2 block ${theme === "dark" ? "text-slate-200" : ""}`}
+                        >
+                          自动保存间隔: {autoSaveInterval}秒
+                        </Label>
+                        <Slider
+                          id="auto-save-interval"
+                          min={10}
+                          max={300}
+                          step={10}
+                          value={[autoSaveInterval]}
+                          onValueChange={(value) => setAutoSaveInterval(value[0])}
+                          className="mt-2"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="export">
+                  <div className="space-y-4">
                     <div>
                       <Label htmlFor="watermark" className={`mb-2 block ${theme === "dark" ? "text-slate-200" : ""}`}>
                         水印文本
@@ -936,88 +1671,240 @@ function factorial(n) {
                         placeholder="输入导出图片的水印文本"
                       />
                     </div>
-                  </div>
-                </div>
 
-                <div className="col-span-2">
-                  <div className="flex items-center gap-2 mb-3">
-                    <FileDown className="h-5 w-5 text-primary" />
-                    <h3 className={`text-lg font-medium ${theme === "dark" ? "text-slate-100" : ""}`}>导出选项</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-4">
+                      <Button
+                        onClick={exportAsPDF}
+                        className={`flex items-center gap-2 transition-all ${theme === "dark" ? "bg-slate-800 text-white border-slate-600 hover:bg-slate-700" : ""}`}
+                        disabled={isExporting !== null}
+                        variant={theme === "dark" ? "secondary" : "default"}
+                      >
+                        {isExporting === "pdf" ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <FilePdf className="h-4 w-4" />
+                        )}
+                        导出为PDF
+                      </Button>
+                      <Button
+                        onClick={exportAsImage}
+                        className={`flex items-center gap-2 transition-all ${theme === "dark" ? "bg-slate-800 text-white border-slate-600 hover:bg-slate-700" : ""}`}
+                        disabled={isExporting !== null}
+                        variant={theme === "dark" ? "secondary" : "default"}
+                      >
+                        {isExporting === "image" ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <FileImage className="h-4 w-4" />
+                        )}
+                        导出为PNG
+                      </Button>
+                      <Button
+                        onClick={exportAsHTML}
+                        className={`flex items-center gap-2 transition-all ${theme === "dark" ? "bg-slate-800 text-white border-slate-600 hover:bg-slate-700" : ""}`}
+                        disabled={isExporting !== null}
+                        variant={theme === "dark" ? "secondary" : "default"}
+                      >
+                        {isExporting === "html" ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <FileCode className="h-4 w-4" />
+                        )}
+                        导出为HTML
+                      </Button>
+                      <Button
+                        onClick={exportAsText}
+                        className={`flex items-center gap-2 transition-all ${theme === "dark" ? "bg-slate-800 text-white border-slate-600 hover:bg-slate-700" : ""}`}
+                        disabled={isExporting !== null}
+                        variant={theme === "dark" ? "secondary" : "default"}
+                      >
+                        {isExporting === "text" ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <FileText className="h-4 w-4" />
+                        )}
+                        导出为Markdown
+                      </Button>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Button
-                      onClick={exportAsPDF}
-                      className="flex items-center gap-2 transition-all"
-                      disabled={isExporting !== null}
-                    >
-                      {isExporting === "pdf" ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <FilePdf className="h-4 w-4" />
-                      )}
-                      导出为PDF
-                    </Button>
-                    <Button
-                      onClick={exportAsImage}
-                      className="flex items-center gap-2 transition-all"
-                      disabled={isExporting !== null}
-                    >
-                      {isExporting === "image" ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <FileImage className="h-4 w-4" />
-                      )}
-                      导出为PNG
-                    </Button>
-                    <Button
-                      onClick={copyToClipboard}
-                      className="flex items-center gap-2 transition-all"
-                      disabled={isExporting !== null}
-                    >
-                      {isExporting === "clipboard" ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Clipboard className="h-4 w-4" />
-                      )}
-                      复制到剪贴板
-                    </Button>
-                  </div>
-                </div>
-              </div>
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
         )}
 
         <footer
-          className={`text-center py-4 mt-6 border-t ${theme === "dark" ? "border-slate-800 text-slate-400" : "border-slate-200 text-muted-foreground"}`}
+          className={`text-center py-3 md:py-4 mt-4 md:mt-6 border-t ${theme === "dark" ? "border-slate-800 text-slate-400" : "border-slate-200 text-muted-foreground"}`}
         >
-          <div className="container mx-auto">
+          <div className="container mx-auto px-2">
             <div className="flex flex-col md:flex-row justify-between items-center gap-2">
-              <p>Markdown转换器 - 轻松保存和分享您的内容</p>
-              <div className="flex items-center gap-4">
+              <p className="text-sm md:text-base">Markdown转换器 - 轻松保存和分享您的内容</p>
+              <div className="flex items-center gap-3 md:gap-4">
                 <a
                   href="#"
-                  className={`text-sm hover:underline ${theme === "dark" ? "text-slate-400 hover:text-slate-300" : ""}`}
+                  className={`text-xs md:text-sm hover:underline ${theme === "dark" ? "text-slate-400 hover:text-slate-300" : ""}`}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setShowShortcutsDialog(true)
+                  }}
                 >
-                  使用指南
+                  快捷键
                 </a>
                 <a
                   href="#"
-                  className={`text-sm hover:underline ${theme === "dark" ? "text-slate-400 hover:text-slate-300" : ""}`}
+                  className={`text-xs md:text-sm hover:underline ${theme === "dark" ? "text-slate-400 hover:text-slate-300" : ""}`}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setShowAboutDialog(true)
+                  }}
                 >
                   关于我们
                 </a>
                 <a
-                  href="#"
-                  className={`text-sm hover:underline ${theme === "dark" ? "text-slate-400 hover:text-slate-300" : ""}`}
+                  href="https://github.com/icatw/md2img"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`text-xs md:text-sm hover:underline ${theme === "dark" ? "text-slate-400 hover:text-slate-300" : ""}`}
                 >
-                  反馈建议
+                  GitHub
                 </a>
               </div>
             </div>
           </div>
         </footer>
       </div>
+
+      {/* 快捷键对话框 */}
+      <Dialog open={showShortcutsDialog} onOpenChange={setShowShortcutsDialog}>
+        <DialogContent className={theme === "dark" ? "bg-slate-800 border-slate-700 text-white" : ""}>
+          <DialogHeader>
+            <DialogTitle>键盘快捷键</DialogTitle>
+            <DialogDescription className={theme === "dark" ? "text-slate-300" : ""}>
+              使用这些快捷键可以提高您的工作效率
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 items-center gap-4">
+              <div className="text-sm font-medium">保存内容</div>
+              <div className="flex items-center">
+                <Badge variant="outline" className={theme === "dark" ? "bg-slate-700 text-white" : ""}>
+                  Ctrl
+                </Badge>
+                <span className="mx-1">+</span>
+                <Badge variant="outline" className={theme === "dark" ? "bg-slate-700 text-white" : ""}>
+                  S
+                </Badge>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 items-center gap-4">
+              <div className="text-sm font-medium">切换到编辑模式</div>
+              <div className="flex items-center">
+                <Badge variant="outline" className={theme === "dark" ? "bg-slate-700 text-white" : ""}>
+                  Ctrl
+                </Badge>
+                <span className="mx-1">+</span>
+                <Badge variant="outline" className={theme === "dark" ? "bg-slate-700 text-white" : ""}>
+                  E
+                </Badge>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 items-center gap-4">
+              <div className="text-sm font-medium">切换到预览模式</div>
+              <div className="flex items-center">
+                <Badge variant="outline" className={theme === "dark" ? "bg-slate-700 text-white" : ""}>
+                  Ctrl
+                </Badge>
+                <span className="mx-1">+</span>
+                <Badge variant="outline" className={theme === "dark" ? "bg-slate-700 text-white" : ""}>
+                  P
+                </Badge>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 items-center gap-4">
+              <div className="text-sm font-medium">打开设置</div>
+              <div className="flex items-center">
+                <Badge variant="outline" className={theme === "dark" ? "bg-slate-700 text-white" : ""}>
+                  Ctrl
+                </Badge>
+                <span className="mx-1">+</span>
+                <Badge variant="outline" className={theme === "dark" ? "bg-slate-700 text-white" : ""}>
+                  ,
+                </Badge>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 items-center gap-4">
+              <div className="text-sm font-medium">显示快捷键</div>
+              <div className="flex items-center">
+                <Badge variant="outline" className={theme === "dark" ? "bg-slate-700 text-white" : ""}>
+                  Ctrl
+                </Badge>
+                <span className="mx-1">+</span>
+                <Badge variant="outline" className={theme === "dark" ? "bg-slate-700 text-white" : ""}>
+                  K
+                </Badge>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => setShowShortcutsDialog(false)}
+              className={theme === "dark" ? "bg-slate-700 hover:bg-slate-600 text-white" : ""}
+            >
+              关闭
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 关于对话框 */}
+      <Dialog open={showAboutDialog} onOpenChange={setShowAboutDialog}>
+        <DialogContent className={theme === "dark" ? "bg-slate-800 border-slate-700 text-white" : ""}>
+          <DialogHeader>
+            <DialogTitle>关于 Markdown 转换器</DialogTitle>
+            <DialogDescription className={theme === "dark" ? "text-slate-300" : ""}>
+              一个强大的 Markdown 编辑和导出工具
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center justify-center py-4">
+            <img
+              src="https://blog-icatwms.oss-cn-beijing.aliyuncs.com/logo.png"
+              alt="Markdown编辑器"
+              className="w-16 h-16 mb-4"
+            />
+            <h3 className="text-lg font-bold mb-2">Markdown 转换器</h3>
+            <p className="text-sm text-center mb-4">版本 1.0.0</p>
+            <p className="text-sm text-center mb-4">
+              这是一个强大的工具，可以将您的 Markdown 转换为精美的图片和 PDF。
+              支持代码语法高亮、表格和列表、数学公式等功能。
+            </p>
+            <div className="flex items-center gap-2 mt-2">
+              <a
+                href="https://github.com/icatw/md2img"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-sm hover:underline"
+              >
+                <Github className="h-4 w-4" />
+                GitHub
+              </a>
+              <span>|</span>
+              <a href="#" className="flex items-center gap-1 text-sm hover:underline">
+                <Info className="h-4 w-4" />
+                使用指南
+              </a>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => setShowAboutDialog(false)}
+              className={theme === "dark" ? "bg-slate-700 hover:bg-slate-600 text-white" : ""}
+            >
+              关闭
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Toaster />
     </main>
   )
