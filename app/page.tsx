@@ -398,21 +398,32 @@ function factorial(n) {
     const ctx = canvas.getContext("2d")
     if (!ctx) return canvas
 
+    // 创建一个新的canvas以避免修改原始canvas
+    const watermarkedCanvas = document.createElement("canvas")
+    watermarkedCanvas.width = canvas.width
+    watermarkedCanvas.height = canvas.height
+    const watermarkCtx = watermarkedCanvas.getContext("2d")
+
+    if (!watermarkCtx) return canvas
+
+    // 首先绘制原始图像
+    watermarkCtx.drawImage(canvas, 0, 0)
+
     // 设置水印样式
-    const fontSize = Math.max(14, canvas.width / 40)
-    ctx.font = `${fontSize}px Arial, sans-serif`
-    ctx.fillStyle = theme === "dark" ? "rgba(255, 255, 255, 0.6)" : "rgba(0, 0, 0, 0.6)"
-    ctx.textAlign = "center"
+    const fontSize = Math.max(16, canvas.width / 40)
+    watermarkCtx.font = `${fontSize}px Arial, sans-serif`
+    watermarkCtx.fillStyle = theme === "dark" ? "rgba(255, 255, 255, 0.7)" : "rgba(0, 0, 0, 0.7)"
+    watermarkCtx.textAlign = "center"
 
     // 在底部添加水印，确保有足够的边距
     const padding = fontSize * 2
     const watermarkY = canvas.height - padding
 
     // 添加半透明背景以确保水印可见
-    const textWidth = ctx.measureText(text).width
+    const textWidth = watermarkCtx.measureText(text).width
     const bgPadding = 10
-    ctx.fillStyle = theme === "dark" ? "rgba(0, 0, 0, 0.3)" : "rgba(255, 255, 255, 0.3)"
-    ctx.fillRect(
+    watermarkCtx.fillStyle = theme === "dark" ? "rgba(0, 0, 0, 0.5)" : "rgba(255, 255, 255, 0.5)"
+    watermarkCtx.fillRect(
       (canvas.width - textWidth) / 2 - bgPadding,
       watermarkY - fontSize - bgPadding,
       textWidth + bgPadding * 2,
@@ -420,10 +431,12 @@ function factorial(n) {
     )
 
     // 绘制水印文本
-    ctx.fillStyle = theme === "dark" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.8)"
-    ctx.fillText(text, canvas.width / 2, watermarkY)
+    watermarkCtx.fillStyle = theme === "dark" ? "rgba(255, 255, 255, 0.9)" : "rgba(0, 0, 0, 0.9)"
+    watermarkCtx.fillText(text, canvas.width / 2, watermarkY)
 
-    return canvas
+    console.log("Watermark added successfully:", text)
+
+    return watermarkedCanvas
   }
 
   const exportAsPDF = async () => {
@@ -471,6 +484,7 @@ function factorial(n) {
       if (enableWatermark && watermarkText.trim()) {
         console.log("Adding watermark to PDF:", watermarkText, "Enabled:", enableWatermark)
         finalCanvas = addWatermark(canvas, watermarkText)
+        console.log("Watermark added to PDF, canvas dimensions:", finalCanvas.width, "x", finalCanvas.height)
       } else {
         console.log("Watermark not added to PDF. Enabled:", enableWatermark, "Text:", watermarkText)
       }
@@ -555,6 +569,7 @@ function factorial(n) {
       if (enableWatermark && watermarkText.trim()) {
         console.log("Adding watermark:", watermarkText, "Enabled:", enableWatermark)
         finalCanvas = addWatermark(canvas, watermarkText)
+        console.log("Watermark added, canvas dimensions:", finalCanvas.width, "x", finalCanvas.height)
       } else {
         console.log("Watermark not added. Enabled:", enableWatermark, "Text:", watermarkText)
       }
@@ -783,6 +798,7 @@ function factorial(n) {
       if (enableWatermark && watermarkText.trim()) {
         console.log("Adding watermark for clipboard:", watermarkText, "Enabled:", enableWatermark)
         finalCanvas = addWatermark(canvas, watermarkText)
+        console.log("Watermark added for clipboard, canvas dimensions:", finalCanvas.width, "x", finalCanvas.height)
       } else {
         console.log("Watermark not added for clipboard. Enabled:", enableWatermark, "Text:", watermarkText)
       }
