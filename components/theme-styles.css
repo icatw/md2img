@@ -214,3 +214,84 @@
   margin-top: 0.5em;
   margin-bottom: 0.5em;
 }
+
+/* 自定义代码块样式 - 亮色主题 */
+.code-block-light-default {
+  background-color: #f5f7fa;
+  border: 1px solid #e2e8f0;
+  color: #1a202c;
+}
+
+.code-block-light-github {
+  background-color: #f6f8fa;
+  border: 1px solid #dfe2e5;
+  color: #24292e;
+}
+
+.code-block-light-notion {
+  background-color: #f7f6f3;
+  border: 1px solid #e3e2e0;
+  color: #37352f;
+}
+
+.code-block-light-chatgpt {
+  background-color: #f7f7f8;
+  border: 1px solid #e5e5e5;
+  color: #353740;
+}
+
+/* 自定义代码块样式 - 暗色主题 */
+.code-block-dark-default {
+  background-color: #2d3748;
+  border: 1px solid #4a5568;
+  color: #e2e8f0;
+}
+
+.code-block-dark-github {
+  background-color: #161b22;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+}
+
+.code-block-dark-notion {
+  background-color: #2f3437;
+  border: 1px solid #5a5a5a;
+  color: #ededed;
+}
+
+.code-block-dark-chatgpt {
+  background-color: #2a2b32;
+  border: 1px solid #4d4d4f;
+  color: #ececf1;
+}
+
+/* 代码语言标签样式 */
+.code-block-light-default > div:first-child,
+.code-block-light-github > div:first-child,
+.code-block-light-notion > div:first-child,
+.code-block-light-chatgpt > div:first-child {
+  font-family: monospace;
+  font-weight: 500;
+}
+
+.code-block-dark-default > div:first-child,
+.code-block-dark-github > div:first-child,
+.code-block-dark-notion > div:first-child,
+.code-block-dark-chatgpt > div:first-child {
+  font-family: monospace;
+  font-weight: 500;
+}
+
+/* 代码内容样式 */
+.code-block-light-default code,
+.code-block-light-github code,
+.code-block-light-notion code,
+.code-block-light-chatgpt code,
+.code-block-dark-default code,
+.code-block-dark-github code,
+.code-block-dark-notion code,
+.code-block-dark-chatgpt code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+  line-height: 1.5;
+}

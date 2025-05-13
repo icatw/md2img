@@ -2,15 +2,6 @@
 
 import type React from "react"
 import ReactMarkdown from "react-markdown"
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
-import {
-  tomorrow,
-  oneLight,
-  vscDarkPlus,
-  vs,
-  dracula,
-  solarizedlight,
-} from "react-syntax-highlighter/dist/esm/styles/prism"
 import remarkGfm from "remark-gfm"
 import rehypeRaw from "rehype-raw"
 import "./theme-styles.css"
@@ -25,29 +16,29 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ markdown, themeStyle 
   // 使用传入的主题参数而不是检测DOM
   const isDarkMode = theme === "dark"
 
-  // 根据主题风格选择代码高亮样式
-  const getCodeStyle = () => {
+  // 获取代码块的类名
+  const getCodeBlockClassName = () => {
     if (isDarkMode) {
       switch (themeStyle) {
         case "github":
-          return dracula // GitHub暗色替代
+          return "code-block-dark-github"
         case "notion":
-          return tomorrow // Notion暗色替代
+          return "code-block-dark-notion"
         case "chatgpt":
-          return vscDarkPlus
+          return "code-block-dark-chatgpt"
         default:
-          return tomorrow
+          return "code-block-dark-default"
       }
     } else {
       switch (themeStyle) {
         case "github":
-          return solarizedlight // GitHub亮色替代
+          return "code-block-light-github"
         case "notion":
-          return oneLight // Notion亮色替代
+          return "code-block-light-notion"
         case "chatgpt":
-          return vs
+          return "code-block-light-chatgpt"
         default:
-          return oneLight
+          return "code-block-light-default"
       }
     }
   }
@@ -61,20 +52,18 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ markdown, themeStyle 
         code({ node, inline, className, children, ...props }) {
           const match = /language-(\w+)/.exec(className || "")
           return !inline && match ? (
-            <SyntaxHighlighter
-              style={getCodeStyle()}
-              language={match[1]}
-              PreTag="div"
-              {...props}
-              customStyle={{
-                margin: "1.5em 0",
-                borderRadius: "6px",
-              }}
-            >
-              {String(children).replace(/\n$/, "")}
-            </SyntaxHighlighter>
+            <div className={`${getCodeBlockClassName()} rounded-md overflow-hidden my-6`}>
+              <div className="px-4 py-2 text-xs border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
+                {match[1]}
+              </div>
+              <pre className="p-4 overflow-auto">
+                <code className={className} {...props}>
+                  {String(children).replace(/\n$/, "")}
+                </code>
+              </pre>
+            </div>
           ) : (
-            <code className={className} {...props}>
+            <code className={`${className} px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800`} {...props}>
               {children}
             </code>
           )

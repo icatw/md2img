@@ -50,6 +50,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 // 动态导入依赖浏览器环境的组件
 const MarkdownPreview = dynamic(() => import("@/components/markdown-preview"), { ssr: false })
 const ThemePreview = dynamic(() => import("@/components/theme-preview"), { ssr: false })
+// 动态导入Monaco编辑器组件
+const MarkdownEditor = dynamic(() => import("@/components/markdown-editor"), { ssr: false })
 
 // 修改主函数开始部分，增强夜间模式的对比度
 export default function Home() {
@@ -58,7 +60,6 @@ export default function Home() {
   const [themeStyle, setThemeStyle] = useState<string>("default")
   const [fontSize, setFontSize] = useState<number>(16)
   const previewRef = useRef<HTMLDivElement>(null)
-  const editorRef = useRef<HTMLTextAreaElement>(null)
   const { toast } = useToast()
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isExporting, setIsExporting] = useState<string | null>(null)
@@ -80,6 +81,8 @@ export default function Home() {
   const [showShortcutsDialog, setShowShortcutsDialog] = useState<boolean>(false)
   const [showAboutDialog, setShowAboutDialog] = useState<boolean>(false)
   const [isDragging, setIsDragging] = useState<boolean>(false)
+  // 添加水印开关功能
+  const [enableWatermark, setEnableWatermark] = useState<boolean>(true)
 
   // 根据主题和风格获取背景颜色
   const getBackgroundColor = (theme: string, style: string): string => {
@@ -164,6 +167,9 @@ function factorial(n) {
     setCharCount(chars)
     setWordCount(words)
     setReadingTime(time)
+
+    // 更新行数
+    setLineCount(text.split("\n").length)
   }, [])
 
   // 自动保存功能
@@ -248,6 +254,8 @@ function factorial(n) {
     const savedAutoValidate = localStorage.getItem("markdown-auto-validate")
     const savedAutoSave = localStorage.getItem("markdown-auto-save")
     const savedAutoSaveInterval = localStorage.getItem("markdown-auto-save-interval")
+    const savedEnableWatermark = localStorage.getItem("markdown-enable-watermark")
+    const savedWatermarkText = localStorage.getItem("markdown-watermark-text")
 
     // 为首次使用的用户设置示例Markdown
     if (savedMarkdown) {
@@ -265,6 +273,8 @@ function factorial(n) {
     if (savedAutoValidate !== null) setAutoValidate(savedAutoValidate === "true")
     if (savedAutoSave !== null) setAutoSave(savedAutoSave === "true")
     if (savedAutoSaveInterval) setAutoSaveInterval(Number.parseInt(savedAutoSaveInterval, 10))
+    if (savedEnableWatermark !== null) setEnableWatermark(savedEnableWatermark === "true")
+    if (savedWatermarkText) setWatermarkText(savedWatermarkText)
   }, [updateWordCount])
 
   // 保存内容和设置到localStorage
@@ -279,7 +289,21 @@ function factorial(n) {
     localStorage.setItem("markdown-auto-validate", autoValidate.toString())
     localStorage.setItem("markdown-auto-save", autoSave.toString())
     localStorage.setItem("markdown-auto-save-interval", autoSaveInterval.toString())
-  }, [markdown, theme, themeStyle, fontSize, showEditor, autoValidate, autoSave, autoSaveInterval, isMounted])
+    localStorage.setItem("markdown-enable-watermark", enableWatermark.toString())
+    localStorage.setItem("markdown-watermark-text", watermarkText)
+  }, [
+    markdown,
+    theme,
+    themeStyle,
+    fontSize,
+    showEditor,
+    autoValidate,
+    autoSave,
+    autoSaveInterval,
+    enableWatermark,
+    watermarkText,
+    isMounted,
+  ])
 
   // 清理临时图片URL
   useEffect(() => {
@@ -291,33 +315,6 @@ function factorial(n) {
       }
     }
   }, [copyImageUrl, isMounted])
-
-  // 更新行数计数
-  useEffect(() => {
-    if (!isMounted) return
-
-    setLineCount(markdown.split("\n").length)
-  }, [markdown, isMounted])
-
-  // 同步滚动行号和编辑器
-  useEffect(() => {
-    if (!isMounted || !editorRef.current) return
-
-    const editor = editorRef.current
-    const handleScroll = () => {
-      // 获取编辑器的父元素中的第一个子元素（行号容器）
-      const lineNumbersContainer = editor.parentElement?.firstElementChild
-      if (lineNumbersContainer) {
-        lineNumbersContainer.scrollTop = editor.scrollTop
-      }
-    }
-
-    editor.addEventListener("scroll", handleScroll)
-
-    return () => {
-      editor.removeEventListener("scroll", handleScroll)
-    }
-  }, [isMounted])
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -396,17 +393,35 @@ function factorial(n) {
 
   // 添加水印到画布
   const addWatermark = (canvas: HTMLCanvasElement, text: string) => {
+    if (!enableWatermark || !text.trim()) return canvas
+
     const ctx = canvas.getContext("2d")
     if (!ctx) return canvas
 
-    const fontSize = Math.max(12, canvas.width / 50)
-    ctx.font = `${fontSize}px Arial`
-    ctx.fillStyle = theme === "dark" ? "rgba(255, 255, 255, 0.5)" : "rgba(0, 0, 0, 0.5)"
+    // 设置水印样式
+    const fontSize = Math.max(14, canvas.width / 40)
+    ctx.font = `${fontSize}px Arial, sans-serif`
+    ctx.fillStyle = theme === "dark" ? "rgba(255, 255, 255, 0.6)" : "rgba(0, 0, 0, 0.6)"
     ctx.textAlign = "center"
 
     // 在底部添加水印，确保有足够的边距
     const padding = fontSize * 2
-    ctx.fillText(text, canvas.width / 2, canvas.height - padding / 2)
+    const watermarkY = canvas.height - padding
+
+    // 添加半透明背景以确保水印可见
+    const textWidth = ctx.measureText(text).width
+    const bgPadding = 10
+    ctx.fillStyle = theme === "dark" ? "rgba(0, 0, 0, 0.3)" : "rgba(255, 255, 255, 0.3)"
+    ctx.fillRect(
+      (canvas.width - textWidth) / 2 - bgPadding,
+      watermarkY - fontSize - bgPadding,
+      textWidth + bgPadding * 2,
+      fontSize + bgPadding * 2,
+    )
+
+    // 绘制水印文本
+    ctx.fillStyle = theme === "dark" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.8)"
+    ctx.fillText(text, canvas.width / 2, watermarkY)
 
     return canvas
   }
@@ -434,7 +449,7 @@ function factorial(n) {
     try {
       // 添加额外的底部边距，确保内容不会被截断
       const originalStyle = previewRef.current.style.cssText
-      previewRef.current.style.paddingBottom = "60px" // 为水印添加额外空间
+      previewRef.current.style.paddingBottom = "80px" // 为水印添加更多空间
 
       setExportProgress(30)
       const canvas = await html2canvas(previewRef.current, {
@@ -450,10 +465,17 @@ function factorial(n) {
       previewRef.current.style.cssText = originalStyle
 
       setExportProgress(60)
-      // 添加水印
-      const canvasWithWatermark = addWatermark(canvas, watermarkText)
 
-      const imgData = canvasWithWatermark.toDataURL("image/jpeg", 1.0)
+      // 添加水印 - 确保这里的条件检查正确
+      let finalCanvas = canvas
+      if (enableWatermark && watermarkText.trim()) {
+        console.log("Adding watermark to PDF:", watermarkText, "Enabled:", enableWatermark)
+        finalCanvas = addWatermark(canvas, watermarkText)
+      } else {
+        console.log("Watermark not added to PDF. Enabled:", enableWatermark, "Text:", watermarkText)
+      }
+
+      const imgData = finalCanvas.toDataURL("image/jpeg", 1.0)
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
@@ -472,6 +494,7 @@ function factorial(n) {
         description: "您的PDF已成功下载。",
       })
     } catch (error) {
+      console.error("导出PDF错误:", error)
       toast({
         title: "导出失败",
         description: "导出PDF时出现错误。",
@@ -510,7 +533,7 @@ function factorial(n) {
     try {
       // 添加额外的底部边距，确保内容不会被截断
       const originalStyle = previewRef.current.style.cssText
-      previewRef.current.style.paddingBottom = "60px" // 为水印添加额外空间
+      previewRef.current.style.paddingBottom = "80px" // 为水印添加更多空间
 
       setExportProgress(40)
       const canvas = await html2canvas(previewRef.current, {
@@ -526,12 +549,19 @@ function factorial(n) {
       previewRef.current.style.cssText = originalStyle
 
       setExportProgress(70)
-      // 添加水印
-      const canvasWithWatermark = addWatermark(canvas, watermarkText)
+
+      // 添加水印 - 确保这里的条件检查正确
+      let finalCanvas = canvas
+      if (enableWatermark && watermarkText.trim()) {
+        console.log("Adding watermark:", watermarkText, "Enabled:", enableWatermark)
+        finalCanvas = addWatermark(canvas, watermarkText)
+      } else {
+        console.log("Watermark not added. Enabled:", enableWatermark, "Text:", watermarkText)
+      }
 
       const link = document.createElement("a")
       link.download = "markdown-export.png"
-      link.href = canvasWithWatermark.toDataURL("image/png")
+      link.href = finalCanvas.toDataURL("image/png")
       link.click()
 
       setExportProgress(100)
@@ -540,6 +570,7 @@ function factorial(n) {
         description: "您的图片已成功下载。",
       })
     } catch (error) {
+      console.error("导出图片错误:", error)
       toast({
         title: "导出失败",
         description: "导出图片时出现错误。",
@@ -625,9 +656,15 @@ function factorial(n) {
 </head>
 <body>
   ${previewRef.current.innerHTML}
+  ${
+    enableWatermark && watermarkText
+      ? `
   <div class="footer">
     ${watermarkText}
   </div>
+  `
+      : ""
+  }
 </body>
 </html>
       `
@@ -724,7 +761,7 @@ function factorial(n) {
     try {
       // 添加额外的底部边距，确保内容不会被截断
       const originalStyle = previewRef.current.style.cssText
-      previewRef.current.style.paddingBottom = "60px" // 为水印添加额外空间
+      previewRef.current.style.paddingBottom = "80px" // 为水印添加更多空间
 
       setExportProgress(40)
       const canvas = await html2canvas(previewRef.current, {
@@ -740,11 +777,18 @@ function factorial(n) {
       previewRef.current.style.cssText = originalStyle
 
       setExportProgress(70)
-      // 添加水印
-      const canvasWithWatermark = addWatermark(canvas, watermarkText)
+
+      // 添加水印 - 确保这里的条件检查正确
+      let finalCanvas = canvas
+      if (enableWatermark && watermarkText.trim()) {
+        console.log("Adding watermark for clipboard:", watermarkText, "Enabled:", enableWatermark)
+        finalCanvas = addWatermark(canvas, watermarkText)
+      } else {
+        console.log("Watermark not added for clipboard. Enabled:", enableWatermark, "Text:", watermarkText)
+      }
 
       // 将Canvas转换为Blob
-      canvasWithWatermark.toBlob(async (blob) => {
+      finalCanvas.toBlob(async (blob) => {
         if (blob) {
           try {
             // 创建一个新的ClipboardItem对象
@@ -936,16 +980,10 @@ function factorial(n) {
     }
   }
 
-  const handleMarkdownChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newContent = e.target.value
-    setMarkdown(newContent)
-    updateWordCount(newContent)
-    validateMarkdown(newContent)
-  }
-
-  // 根据当前主题获取按钮变体
-  const getButtonVariant = (isDark: boolean) => {
-    return isDark ? "secondary" : "outline"
+  const handleMarkdownChange = (value: string) => {
+    setMarkdown(value)
+    updateWordCount(value)
+    validateMarkdown(value)
   }
 
   // 如果组件尚未挂载，返回加载状态或空内容
@@ -1450,43 +1488,13 @@ function factorial(n) {
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
               >
-                <div className="flex h-full">
-                  {/* 行号区域 - 使用固定宽度并设置overflow-hidden */}
-                  <div
-                    className={`w-10 flex-shrink-0 overflow-hidden ${
-                      theme === "dark" ? "bg-slate-700 bg-opacity-50" : "bg-slate-100 bg-opacity-50"
-                    }`}
-                  >
-                    <div className="pt-4 text-right pr-2 text-xs text-muted-foreground font-mono select-none">
-                      {Array.from({ length: lineCount }).map((_, i) => (
-                        <div key={i} className="h-6 leading-6">
-                          {i + 1}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* 文本编辑区域 */}
-                  <Textarea
-                    ref={editorRef}
-                    value={markdown}
-                    onChange={handleMarkdownChange}
-                    className={`h-full w-full font-mono resize-none border-0 rounded-md p-4 pl-2 ${
-                      theme === "dark"
-                        ? "bg-slate-800 text-slate-100 placeholder:text-slate-400"
-                        : "bg-slate-50 placeholder:text-slate-400"
-                    }`}
-                    placeholder="在此处输入或粘贴您的Markdown，或拖放.md文件到此处..."
-                    style={{
-                      lineHeight: "1.5rem",
-                      fontSize: "0.875rem",
-                      letterSpacing: "normal",
-                      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-                    }}
-                    spellCheck="false"
-                    data-gramm="false" // 禁用Grammarly等扩展，避免干扰行高
-                  />
-                </div>
+                {/* 使用Monaco编辑器替换原来的编辑器 */}
+                <MarkdownEditor
+                  value={markdown}
+                  onChange={handleMarkdownChange}
+                  theme={theme}
+                  themeStyle={themeStyle}
+                />
 
                 {/* 文件拖放指示器 */}
                 <div
@@ -1504,24 +1512,39 @@ function factorial(n) {
               </div>
 
               {/* 字数统计 */}
-              <div
-                className={`mt-2 flex items-center justify-between text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}
-              >
-                <div className="flex items-center gap-2">
-                  <span>{lineCount} 行</span>
-                  <span>|</span>
-                  <span>{wordCount} 字</span>
-                  <span>|</span>
-                  <span>{charCount} 字符</span>
+              <div className={`mt-2 ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>
+                {/* 桌面版统计信息 */}
+                <div className="hidden md:flex md:items-center md:justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span>{lineCount} 行</span>
+                    <span>|</span>
+                    <span>{wordCount} 字</span>
+                    <span>|</span>
+                    <span>{charCount} 字符</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span>预计阅读时间: {readingTime} 分钟</span>
+                    {lastSaved && (
+                      <>
+                        <span>|</span>
+                        <span>上次保存: {lastSaved}</span>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span>预计阅读时间: {readingTime} 分钟</span>
-                  {lastSaved && (
-                    <>
-                      <span>|</span>
-                      <span>上次保存: {lastSaved}</span>
-                    </>
-                  )}
+
+                {/* 移动端统计信息 - 垂直布局 */}
+                <div className="md:hidden text-xs">
+                  <div className="flex items-center justify-between mb-1">
+                    <span>{lineCount} 行</span>
+                    <span>
+                      {wordCount} 字 / {charCount} 字符
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>预计阅读: {readingTime} 分钟</span>
+                    {lastSaved && <span>上次保存: {lastSaved}</span>}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1657,20 +1680,29 @@ function factorial(n) {
 
                 <TabsContent value="export">
                   <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="watermark" className={`mb-2 block ${theme === "dark" ? "text-slate-200" : ""}`}>
-                        水印文本
+                    <div className="flex items-center justify-between mb-2">
+                      <Label htmlFor="enable-watermark" className={theme === "dark" ? "text-slate-200" : ""}>
+                        启用水印
                       </Label>
-                      <Textarea
-                        id="watermark"
-                        value={watermarkText}
-                        onChange={(e) => setWatermarkText(e.target.value)}
-                        className={`resize-none h-10 ${
-                          theme === "dark" ? "bg-slate-800 text-slate-100 border-slate-700" : ""
-                        }`}
-                        placeholder="输入导出图片的水印文本"
-                      />
+                      <Switch id="enable-watermark" checked={enableWatermark} onCheckedChange={setEnableWatermark} />
                     </div>
+
+                    {enableWatermark && (
+                      <div>
+                        <Label htmlFor="watermark" className={`mb-2 block ${theme === "dark" ? "text-slate-200" : ""}`}>
+                          水印文本
+                        </Label>
+                        <Textarea
+                          id="watermark"
+                          value={watermarkText}
+                          onChange={(e) => setWatermarkText(e.target.value)}
+                          className={`resize-none h-10 ${
+                            theme === "dark" ? "bg-slate-800 text-slate-100 border-slate-700" : ""
+                          }`}
+                          placeholder="输入导出图片的水印文本"
+                        />
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-4">
                       <Button
